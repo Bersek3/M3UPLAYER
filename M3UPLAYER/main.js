@@ -207,7 +207,8 @@ function showTvLoginScreen() {
     const video = document.getElementById('main-video');
     if (video) {
         video.pause();
-        video.src = '';
+        video.removeAttribute('src');
+        video.load();
     }
     if (hlsMainInstance) {
         hlsMainInstance.destroy();
@@ -588,6 +589,14 @@ let renderedGridCount = 0;
 let renderedDrawerCount = 0;
 let channelSwitchDebounceTimer = null;
 
+function isValidLogoUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    if (trimmed.length < 8) return false;
+    if (trimmed.startsWith('.') || trimmed === '.png' || trimmed === '.jpg') return false;
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
 function renderChannelsGrid(reset) {
     const grid = document.getElementById('channels-grid');
     const countBadge = document.getElementById('channel-count-badge');
@@ -619,7 +628,7 @@ function renderChannelsGrid(reset) {
         card.tabIndex = 0;
 
         let logoHtml = '';
-        if (ch.logo && ch.logo.trim() !== '' && !brokenLogos.has(ch.logo)) {
+        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
             logoHtml = '<img class="channel-logo-img" loading="lazy" src="' + escapeHtml(ch.logo) + '" alt="' + escapeHtml(ch.name) + '" onerror="handleLogoError(this, \'' + escapeHtml(ch.name) + '\')">';
         } else {
             logoHtml = createFallbackLogoHtml(ch.name);
@@ -666,7 +675,7 @@ function renderDrawerChannels(reset) {
         item.dataset.index = idx;
 
         let logoEl = '';
-        if (ch.logo && ch.logo.trim() !== '' && !brokenLogos.has(ch.logo)) {
+        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
             logoEl = '<img class="drawer-item-logo" loading="lazy" src="' + escapeHtml(ch.logo) + '" alt="" onerror="handleLogoError(this, \'' + escapeHtml(ch.name) + '\')">';
         } else {
             const initials = (ch.name || 'TV').substring(0, 2).toUpperCase();
@@ -697,6 +706,7 @@ function createFallbackLogoHtml(name) {
 
 window.handleLogoError = function (imgElement, channelName) {
     if (!imgElement) return;
+    imgElement.onerror = null;
     if (imgElement.src) {
         brokenLogos.add(imgElement.src);
     }

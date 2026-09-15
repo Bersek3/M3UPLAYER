@@ -215,7 +215,7 @@ function initPlaylistForms() {
         }
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Subiendo a MongoDB...';
+        submitBtn.textContent = 'Subiendo y procesando lista...';
 
         try {
             const res = await fetch('/api/user/playlist/upload', {
@@ -383,30 +383,51 @@ function filterChannels() {
         const matchesCategory = (activeCategory === 'ALL' || ch.group === activeCategory);
         const matchesQuery = (!query || 
             ch.name.toLowerCase().includes(query) || 
-            ch.number.includes(query)
+            ch.number.includes(query) ||
+            (ch.group && ch.group.toLowerCase().includes(query))
         );
         return matchesCategory && matchesQuery;
     });
 
-    renderChannelsGrid();
+    renderChannelsGrid(true);
 }
 
-function renderChannelsGrid() {
+let renderedChannelsCount = 0;
+const WEB_CHUNK_SIZE = 48;
+
+function isValidLogoUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    if (trimmed.length < 10) return false;
+    if (trimmed.startsWith('.') || trimmed === '.png' || trimmed === '.jpg') return false;
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
+function renderChannelsGrid(reset) {
     const grid = document.getElementById('web-channels-grid');
-    grid.innerHTML = '';
+    if (!grid) return;
+
+    if (reset) {
+        grid.innerHTML = '';
+        renderedChannelsCount = 0;
+    }
 
     if (filteredChannels.length === 0) {
         grid.innerHTML = '<p class="subtitle" style="grid-column: 1/-1; text-align:center; padding: 20px;">No hay canales en esta sección.</p>';
         return;
     }
 
-    filteredChannels.forEach(ch => {
+    const nextLimit = Math.min(filteredChannels.length, renderedChannelsCount + WEB_CHUNK_SIZE);
+    const fragment = document.createDocumentFragment();
+
+    for (let i = renderedChannelsCount; i < nextLimit; i++) {
+        const ch = filteredChannels[i];
         const card = document.createElement('div');
         card.className = 'web-channel-card';
 
         let logoHtml = '';
-        if (ch.logo) {
-            logoHtml = `<img src="${escapeHtml(ch.logo)}" alt="" onerror="this.src=''; this.parentElement.innerHTML='📺';">`;
+        if (isValidLogoUrl(ch.logo)) {
+            logoHtml = `<img loading="lazy" src="${escapeHtml(ch.logo)}" alt="" class="web-logo-img" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"><span class="fallback-logo" style="display:none; font-size:20px;">📺</span>`;
         } else {
             logoHtml = `<span style="font-size: 20px;">📺</span>`;
         }
@@ -414,7 +435,7 @@ function renderChannelsGrid() {
         card.innerHTML = `
             <div class="web-channel-header">
                 <strong>#${ch.number}</strong>
-                <span>${escapeHtml(ch.group)}</span>
+                <span>${escapeHtml(ch.group || 'General')}</span>
             </div>
             <div class="web-channel-logo">
                 ${logoHtml}
@@ -426,8 +447,25 @@ function renderChannelsGrid() {
             openWebPlayer(ch);
         });
 
-        grid.appendChild(card);
-    });
+        fragment.appendChild(card);
+    }
+
+    grid.appendChild(fragment);
+    renderedChannelsCount = nextLimit;
+
+    // Load more button if more channels exist
+    let existingBtn = document.getElementById('btn-load-more-channels');
+    if (existingBtn) existingBtn.remove();
+
+    if (renderedChannelsCount < filteredChannels.length) {
+        const loadMoreBtn = document.createElement('button');
+        loadMoreBtn.id = 'btn-load-more-channels';
+        loadMoreBtn.className = 'btn-ghost';
+        loadMoreBtn.style.cssText = 'grid-column: 1/-1; margin: 20px auto; padding: 12px 24px; font-weight: 700; border-radius: 12px; cursor: pointer; display: block; background: rgba(0, 229, 255, 0.1); border: 1px solid #00e5ff; color: #00e5ff;';
+        loadMoreBtn.textContent = `⬇️ Cargar más canales (Mostrando ${renderedChannelsCount} de ${filteredChannels.length})`;
+        loadMoreBtn.addEventListener('click', () => renderChannelsGrid(false));
+        grid.appendChild(loadMoreBtn);
+    }
 }
 
 // ==========================================================================
@@ -446,14 +484,44 @@ function openWebPlayer(channel) {
         hlsInstance = null;
     }
 
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+
+    const isHttps = window.location.protocol === 'https:';
+    const isHttpStream = channel.url.startsWith('http://');
+
+    let warningBox = document.getElementById('mixed-content-warning');
+    if (isHttps && isHttpStream) {
+        if (!warningBox) {
+            warningBox = document.createElement('div');
+            warningBox.id = 'mixed-content-warning';
+            warningBox.style.cssText = 'background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 10px; text-align: center;';
+            warningBox.innerHTML = '⚠️ <strong>Nota:</strong> Este canal usa enlace HTTP no cifrado. En la web se bloquea por seguridad del navegador (Mixed Content), pero <strong>se reproducirá directamente en tu televisor Samsung</strong>.';
+            video.parentElement.appendChild(warningBox);
+        }
+    } else {
+        if (warningBox) warningBox.remove();
+    }
+
     if (window.Hls && Hls.isSupported() && channel.url.includes('.m3u8')) {
-        hlsInstance = new Hls();
+        hlsInstance = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true
+        });
         hlsInstance.loadSource(channel.url);
         hlsInstance.attachMedia(video);
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(e => console.log('Autoplay bloqueado por el navegador'));
+        });
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            if (data && data.fatal) {
+                console.warn('Error de reproducción:', data.type, data.details);
+            }
+        });
     } else {
         video.src = channel.url;
-        video.play().catch(e => console.log(e));
+        video.play().catch(e => console.log('Reproducción:', e));
     }
 }
 
@@ -462,7 +530,8 @@ document.getElementById('btn-close-preview').addEventListener('click', () => {
     const video = document.getElementById('web-player');
     modal.classList.add('hidden');
     video.pause();
-    video.src = '';
+    video.removeAttribute('src'); // Evita Range Not Satisfiable (416)
+    video.load();
     if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
