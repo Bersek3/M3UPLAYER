@@ -280,7 +280,7 @@ app.get('/api/auth/pair/status', (req, res) => {
 // Mobile phone approves pairing with active token
 app.post('/api/auth/pair/approve', authenticate, async (req, res) => {
     try {
-        const code = (req.body.code || '').trim().toUpperCase();
+        const code = (req.body.code || req.body.pairCode || '').trim().toUpperCase();
         if (!code || !pairSessions.has(code)) {
             return res.status(400).json({ error: 'Código de vinculación inválido o expirado' });
         }

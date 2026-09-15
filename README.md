@@ -24,26 +24,6 @@ Aplicación profesional de reproducción IPTV / M3U para **Samsung Smart TV (Tiz
 
 ---
 
-## 🚀 Despliegue en Render (Cloud Hosting Gratuito)
-
-Este proyecto está 100% preparado para ejecutarse en [Render](https://render.com).
-
-### Pasos para desplegar:
-1. Inicia sesión en [Render.com](https://render.com).
-2. Haz clic en **New +** y selecciona **Web Service**.
-3. Conecta tu repositorio de GitHub: `https://github.com/Bersek3/M3UPLAYER.git`.
-4. Render detectará automáticamente la configuración o puedes definir:
-   - **Environment**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-5. En la sección **Environment Variables**, asegúrate de tener:
-   - `MONGO_URI`: `mongodb+srv://franciscojmaguilar11_db_user:8KHcxKKvUMbHeVk2@cluster0.rpmhjcl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
-   - `NODE_ENV`: `production`
-6. Haz clic en **Deploy Web Service**.
-7. Una vez desplegado, Render te dará un enlace público (ejemplo: `https://m3uplayer.onrender.com`).
-
----
-
 ## 📲 Cómo Usar
 
 1. **Registro / Subida de Listas**:
