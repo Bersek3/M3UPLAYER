@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>M3UTV Portal - Gestión de Listas y Samsung TV</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div id="app-wrapper">
+
+        <!-- HEADER -->
+        <header id="main-header">
+            <div class="brand">
+                <span class="brand-icon">⚡</span>
+                <h1>M3U<span class="highlight">TV</span> <span class="badge">CLOUD</span></h1>
+            </div>
+            <div id="user-header-info" class="user-header-info hidden">
+                <span id="header-username" class="username-tag">Usuario</span>
+                <button id="btn-logout" class="btn-logout">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <!-- MAIN CONTAINER -->
+        <main class="content-area">
+
+            <!-- SECTION 1: AUTH (LOGIN & REGISTER) -->
+            <section id="auth-section" class="auth-card">
+                <div class="auth-tabs">
+                    <button id="tab-login" class="tab-btn active">Iniciar Sesión</button>
+                    <button id="tab-register" class="tab-btn">Crear Cuenta Nueva</button>
+                </div>
+
+                <div class="auth-body">
+                    <p id="auth-subtitle" class="auth-subtitle">Ingresa para administrar tus canales de Samsung TV</p>
+
+                    <form id="auth-form">
+                        <div class="input-group">
+                            <label for="auth-username">Nombre de Usuario:</label>
+                            <input type="text" id="auth-username" required placeholder="ej. francisco11" autocomplete="username">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="auth-password">Contraseña:</label>
+                            <input type="password" id="auth-password" required placeholder="••••••••" autocomplete="current-password">
+                        </div>
+
+                        <div id="auth-error" class="alert-error hidden"></div>
+                        <div id="auth-success" class="alert-success hidden"></div>
+
+                        <button type="submit" id="btn-auth-submit" class="btn-primary">
+                            <span id="auth-btn-text">Entrar al Panel</span>
+                        </button>
+                    </form>
+
+                    <div class="tv-notice-box">
+                        <span class="notice-icon">📺</span>
+                        <p>Una vez que te registres aquí, podrás abrir la app en tu televisor Samsung e iniciar sesión con este mismo usuario.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: USER DASHBOARD (SHOWN WHEN LOGGED IN) -->
+            <section id="dashboard-section" class="dashboard-container hidden">
+
+                <!-- TV PAIRING BANNER -->
+                <div class="tv-banner">
+                    <div class="banner-text">
+                        <h3>📺 Vincula tu Samsung Smart TV</h3>
+                        <p>Para ver tus canales en la tele: Abre la app en tu Smart TV e inicia sesión con tu usuario: <strong id="banner-user-display" class="highlight-user">usuario</strong></p>
+                    </div>
+                    <div class="banner-badge">Sincronización Automática</div>
+                </div>
+
+                <!-- ADD LISTS TABS & FORMS -->
+                <div class="card add-playlist-card">
+                    <h2>Administrar Listas M3U</h2>
+                    <p class="subtitle">Sube un archivo de tu dispositivo o pega un enlace de internet</p>
+
+                    <div class="sub-tabs">
+                        <button id="btn-tab-url" class="sub-tab-btn active">🌐 Enlace Remoto (URL)</button>
+                        <button id="btn-tab-file" class="sub-tab-btn">📁 Subir Archivo Local (.m3u)</button>
+                    </div>
+
+                    <!-- FORM 1: REMOTE URL -->
+                    <form id="form-url" class="tab-content-pane">
+                        <div class="input-group">
+                            <label for="playlist-url">URL de la Lista M3U / M3U8:</label>
+                            <input type="url" id="playlist-url" required placeholder="https://ejemplo.com/lista.m3u">
+                        </div>
+                        <div class="input-group">
+                            <label for="playlist-name-url">Nombre de la lista (Opcional):</label>
+                            <input type="text" id="playlist-name-url" placeholder="ej. Mis Canales IPTV">
+                        </div>
+                        <button type="submit" class="btn-primary" id="btn-submit-url">
+                            <span>🚀 Descargar y Guardar en la Nube</span>
+                        </button>
+                    </form>
+
+                    <!-- FORM 2: LOCAL FILE UPLOAD -->
+                    <form id="form-file" class="tab-content-pane hidden">
+                        <div class="file-dropzone" id="dropzone">
+                            <input type="file" id="playlist-file" accept=".m3u,.m3u8,.txt" style="display: none;">
+                            <div class="dropzone-content">
+                                <span class="dropzone-icon">📁</span>
+                                <p>Toca aquí para seleccionar tu archivo <strong>.m3u</strong> o <strong>.m3u8</strong></p>
+                                <span id="file-chosen-label" class="file-chosen-label">Ningún archivo seleccionado</span>
+                            </div>
+                        </div>
+                        <div class="input-group" style="margin-top: 14px;">
+                            <label for="playlist-name-file">Nombre de la lista (Opcional):</label>
+                            <input type="text" id="playlist-name-file" placeholder="ej. Canales de Cable">
+                        </div>
+                        <button type="submit" class="btn-primary" id="btn-submit-file" disabled>
+                            <span>📤 Subir y Guardar en la Nube</span>
+                        </button>
+                    </form>
+
+                    <div id="playlist-feedback" class="feedback-msg hidden"></div>
+                </div>
+
+                <!-- MY PLAYLISTS SUMMARY -->
+                <div class="card playlists-summary-card">
+                    <div class="card-header-flex">
+                        <h2>Mis Listas Activas</h2>
+                        <button id="btn-refresh" class="btn-ghost">🔄 Refrescar</button>
+                    </div>
+                    <div id="playlists-list" class="playlists-list">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+
+                <!-- CHANNELS EXPLORER -->
+                <div class="card channels-explorer-card">
+                    <div class="card-header-flex">
+                        <div>
+                            <h2>Canales Sincronizados (<span id="total-channels-count">0</span>)</h2>
+                            <p class="subtitle">Estos son los canales que se verán en tu Samsung Smart TV</p>
+                        </div>
+                        <div class="search-wrap">
+                            <input type="text" id="web-search" placeholder="🔍 Filtrar canal...">
+                        </div>
+                    </div>
+
+                    <!-- Category Pills -->
+                    <div id="web-categories" class="categories-bar"></div>
+
+                    <!-- Channel Cards Grid -->
+                    <div id="web-channels-grid" class="web-channels-grid">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+
+                <!-- PREVIEW MODAL PLAYER -->
+                <div id="preview-modal" class="modal-backdrop hidden">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 id="modal-channel-title">Reproductor Web</h3>
+                            <button id="btn-close-preview" class="btn-close">&times;</button>
+                        </div>
+                        <div class="modal-video-box">
+                            <video id="web-player" controls autoplay playsinline></video>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

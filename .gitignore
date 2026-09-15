@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+server/node_modules/
+package-lock.json
+
+# Environment variables & secrets
+.env
+server/.env
+*.env.local
+
+# Tizen build artifacts & IDE files
+.tizen-rds/
+Debug/
+.project
+.tproject
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+*.code-workspace

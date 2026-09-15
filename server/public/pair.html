@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vincular Smart TV - M3U TV Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .pair-container {
+            max-width: 460px;
+            margin: 40px auto;
+            padding: 0 16px;
+        }
+        .pair-card {
+            background: #0f172a;
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-radius: 20px;
+            padding: 32px 26px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            text-align: center;
+        }
+        .tv-device-icon {
+            font-size: 52px;
+            margin-bottom: 6px;
+            filter: drop-shadow(0 0 16px rgba(0, 229, 255, 0.5));
+        }
+        .pair-code-badge {
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #00e5ff;
+            background: rgba(0, 229, 255, 0.1);
+            border: 1px dashed rgba(0, 229, 255, 0.5);
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin: 10px 0;
+            display: inline-block;
+        }
+        .user-pill {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-size: 15px;
+            color: #93c5fd;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="pair-container">
+        <!-- HEADER -->
+        <header id="main-header" style="justify-content: center; margin-bottom: 24px;">
+            <div class="brand">
+                <span class="brand-icon">⚡</span>
+                <h1>M3U<span class="highlight">TV</span> PRO</h1>
+            </div>
+        </header>
+
+        <div class="pair-card">
+            <div class="tv-device-icon">📺</div>
+            <h2>Vincular Samsung Smart TV</h2>
+            <p class="subtitle" style="color: #94a3b8; font-size: 14px;">
+                Conecta tu televisor a tu cuenta en 1 solo paso sin escribir contraseñas con el control remoto.
+            </p>
+
+            <div id="pair-code-display" class="pair-code-badge">------</div>
+
+            <!-- STATE 1: USER IS LOGGED IN ON PHONE -->
+            <div id="logged-view" class="hidden">
+                <div class="user-pill">
+                    <span>👤 Cuenta:</span>
+                    <strong id="logged-username" style="color: #ffffff;">Usuario</strong>
+                </div>
+
+                <div id="approve-error" class="alert-error hidden" style="margin-top: 14px;"></div>
+                <div id="approve-success" class="alert-success hidden" style="margin-top: 14px;"></div>
+
+                <button id="btn-approve-pair" class="btn-primary" style="margin-top: 16px; height: 54px; font-size: 17px; font-weight: 800;">
+                    <span>✅ Conectar este Televisor Ahora</span>
+                </button>
+
+                <p style="font-size: 12px; color: #64748b; margin-top: 14px;">
+                    ¿No es tu cuenta? <a href="index.html" style="color: #00e5ff; text-decoration: underline;">Cambiar de cuenta</a>
+                </p>
+            </div>
+
+            <!-- STATE 2: USER NOT LOGGED IN ON PHONE -->
+            <div id="unlogged-view" class="hidden" style="text-align: left;">
+                <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 14px; text-align: center;">
+                    Inicia sesión o regístrate en tu cuenta para autorizar este televisor:
+                </p>
+
+                <div class="auth-tabs" style="margin-bottom: 14px;">
+                    <button id="tab-login" class="tab-btn active">Entrar</button>
+                    <button id="tab-register" class="tab-btn">Registrarse</button>
+                </div>
+
+                <form id="mobile-auth-form">
+                    <div class="input-group">
+                        <label for="mob-username">Usuario:</label>
+                        <input type="text" id="mob-username" required placeholder="Tu usuario" autocomplete="username">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="mob-password">Contraseña:</label>
+                        <input type="password" id="mob-password" required placeholder="••••••••" autocomplete="current-password">
+                    </div>
+
+                    <div id="mob-error" class="alert-error hidden" style="margin: 10px 0;"></div>
+
+                    <button type="submit" id="btn-mob-submit" class="btn-primary" style="margin-top: 12px; width: 100%;">
+                        <span>🔑 Entrar y Conectar TV</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- STATE 3: COMPLETED SUCCESS -->
+            <div id="success-view" class="hidden">
+                <div style="font-size: 54px; margin: 10px 0;">🎉</div>
+                <h3 style="color: #10b981; font-size: 22px; font-weight: 800;">¡Televisor Conectado!</h3>
+                <p style="color: #cbd5e1; font-size: 15px; margin-top: 8px;">
+                    Tu Smart TV ya inició sesión automáticamente y empezará a reproducir tus canales.
+                </p>
+                <a href="index.html" class="btn-primary" style="margin-top: 20px; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                    <span>📱 Ir a Mi Panel de Canales</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const pairCode = (urlParams.get('code') || '').trim().toUpperCase();
+
+        const codeDisplay = document.getElementById('pair-code-display');
+        const loggedView = document.getElementById('logged-view');
+        const unloggedView = document.getElementById('unlogged-view');
+        const successView = document.getElementById('success-view');
+        const loggedUsernameEl = document.getElementById('logged-username');
+
+        const btnApprove = document.getElementById('btn-approve-pair');
+        const approveError = document.getElementById('approve-error');
+        const approveSuccess = document.getElementById('approve-success');
+
+        if (pairCode) {
+            codeDisplay.textContent = pairCode;
+        } else {
+            codeDisplay.textContent = "SIN CÓDIGO";
+        }
+
+        // Check active session
+        const currentToken = localStorage.getItem('m3u_user_token');
+        const currentUsername = localStorage.getItem('m3u_user_username');
+
+        if (currentToken && currentUsername) {
+            loggedView.classList.remove('hidden');
+            loggedUsernameEl.textContent = currentUsername;
+        } else {
+            unloggedView.classList.remove('hidden');
+        }
+
+        // Approve Pairing
+        btnApprove.addEventListener('click', () => {
+            if (!pairCode) {
+                alert("No se detectó un código válido en el enlace.");
+                return;
+            }
+
+            btnApprove.disabled = true;
+            btnApprove.innerHTML = "<span>⏳ Vinculando...</span>";
+            approveError.classList.add('hidden');
+
+            fetch('/api/auth/pair/approve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + currentToken
+                },
+                body: JSON.stringify({ code: pairCode, token: currentToken })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    loggedView.classList.add('hidden');
+                    successView.classList.remove('hidden');
+                } else {
+                    btnApprove.disabled = false;
+                    btnApprove.innerHTML = "<span>✅ Conectar este Televisor Ahora</span>";
+                    approveError.textContent = data.error || "No se pudo autorizar el televisor.";
+                    approveError.classList.remove('hidden');
+                }
+            })
+            .catch(err => {
+                btnApprove.disabled = false;
+                btnApprove.innerHTML = "<span>✅ Conectar este Televisor Ahora</span>";
+                approveError.textContent = "Error de red al conectar.";
+                approveError.classList.remove('hidden');
+            });
+        });
+
+        // Mobile Auth Form (if not logged in)
+        let isRegisterMode = false;
+        const tabLogin = document.getElementById('tab-login');
+        const tabRegister = document.getElementById('tab-register');
+        const mobForm = document.getElementById('mobile-auth-form');
+        const mobError = document.getElementById('mob-error');
+        const btnMobSubmit = document.getElementById('btn-mob-submit');
+
+        tabLogin.addEventListener('click', () => {
+            isRegisterMode = false;
+            tabLogin.classList.add('active');
+            tabRegister.classList.remove('active');
+            btnMobSubmit.innerHTML = "<span>🔑 Entrar y Conectar TV</span>";
+        });
+
+        tabRegister.addEventListener('click', () => {
+            isRegisterMode = true;
+            tabRegister.classList.add('active');
+            tabLogin.classList.remove('active');
+            btnMobSubmit.innerHTML = "<span>✨ Registrarse y Conectar TV</span>";
+        });
+
+        mobForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('mob-username').value.trim();
+            const password = document.getElementById('mob-password').value.trim();
+
+            if (!username || !password) return;
+
+            btnMobSubmit.disabled = true;
+            mobError.classList.add('hidden');
+
+            const endpoint = isRegisterMode ? '/api/auth/register' : '/api/auth/login';
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.token) {
+                    localStorage.setItem('m3u_user_token', data.token);
+                    localStorage.setItem('m3u_user_username', data.username);
+
+                    // Immediately approve pairing with the newly obtained token
+                    return fetch('/api/auth/pair/approve', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + data.token
+                        },
+                        body: JSON.stringify({ code: pairCode, token: data.token })
+                    });
+                } else {
+                    throw new Error(data.error || "Credenciales incorrectas");
+                }
+            })
+            .then(res => res ? res.json() : null)
+            .then(data => {
+                if (data && data.success) {
+                    unloggedView.classList.add('hidden');
+                    successView.classList.remove('hidden');
+                } else if (data) {
+                    throw new Error(data.error || "No se pudo vincular el televisor");
+                }
+            })
+            .catch(err => {
+                btnMobSubmit.disabled = false;
+                mobError.textContent = err.message;
+                mobError.classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>

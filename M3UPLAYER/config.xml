@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/tizen" id="http://yourdomain/M3UPLAYER" version="1.3.1" viewmodes="maximized">
+   <name>M3U Player Pro</name>
+   <description>Reproductor IPTV M3U Moderno para Samsung Smart TV</description>
+   <icon src="icon.png"/>
+   <content src="index.html"/>
+   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+   <tizen:application id="vhdFxeE16x.M3UPLAYER" package="vhdFxeE16x" required_version="2.3"/>
+   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+   <tizen:privilege name="http://tizen.org/privilege/internet"/>
+   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+   <access origin="*" subdomains="true"/>
+   <tizen:allow-navigation>*</tizen:allow-navigation>
+   <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+   <tizen:profile name="tv-samsung"/>
+</widget>

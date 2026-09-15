@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, user-scalable=no">
+    <title>M3U Player Pro - Samsung TV</title>
+    <link rel="stylesheet" href="css/style.css?v=1.4.0">
+    <!-- Local streaming and QR code libraries -->
+    <script src="hls.min.js"></script>
+    <script src="qrcode.min.js"></script>
+</head>
+<body class="tv-mode">
+
+    <!-- APP WRAPPER -->
+    <div id="app-container">
+
+        <!-- HEADER / TOPBAR -->
+        <header id="top-bar">
+            <div class="brand-section">
+                <div class="brand-logo">
+                    <span class="brand-icon">⚡</span>
+                    <span class="brand-name">M3U<span class="brand-highlight">TV</span></span>
+                </div>
+                <div class="brand-badge">TIZEN PRO</div>
+            </div>
+
+            <!-- SEARCH BAR -->
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="channel-search" placeholder="Buscar canal o número (ej. 1, HBO)..." tabindex="1" autocomplete="off">
+            </div>
+
+            <!-- STATUS & CLOCK (NO VISIBLE ADMIN BUTTON) -->
+            <div class="header-actions">
+                <div id="clock-display" class="clock-badge">--:--</div>
+                <div id="network-status" class="status-indicator-badge">
+                    <span class="pulse-dot"></span> EN LÍNEA
+                </div>
+            </div>
+        </header>
+
+        <!-- CATEGORY NAVIGATION TABS -->
+        <nav id="category-bar">
+            <div id="category-list" class="category-scroll-container">
+                <!-- Injected dynamically: Todos, Deportes, Cine, Noticias, etc. -->
+            </div>
+        </nav>
+
+        <!-- MAIN CONTENT: CHANNELS LIST + PREVIEW -->
+        <main id="main-content">
+            
+            <!-- CHANNELS GRID SECTION (LEFT) -->
+            <section id="channels-section">
+                <div class="section-header">
+                    <h2 id="current-category-title">Todos los Canales</h2>
+                    <span id="channel-count-badge" class="count-badge">0 canales</span>
+                </div>
+
+                <div id="channels-grid" class="channels-grid" tabindex="3">
+                    <!-- Channels rendered here dynamically -->
+                </div>
+
+                <!-- EMPTY STATE (if no channels match) -->
+                <div id="empty-state" class="empty-state hidden">
+                    <div class="empty-icon">📺</div>
+                    <h3>No se encontraron canales</h3>
+                    <p>Intenta con otra búsqueda o ingresa tu enlace M3U en el panel de administrador.</p>
+                </div>
+            </section>
+
+            <!-- PREVIEW SIDEBAR (RIGHT) -->
+            <aside id="preview-sidebar">
+                <div class="preview-card">
+                    <div class="preview-screen-wrapper">
+                        <video id="preview-video" muted playsinline></video>
+                        <div id="preview-loader" class="preview-loader hidden">
+                            <div class="spinner"></div>
+                        </div>
+                        <div class="live-tag">
+                            <span class="pulse-dot"></span> EN VIVO
+                        </div>
+                    </div>
+
+                    <div class="preview-details">
+                        <div class="preview-header-meta">
+                            <span id="preview-channel-number" class="preview-number">#001</span>
+                            <span id="preview-channel-group" class="preview-group">General</span>
+                        </div>
+
+                        <div class="preview-logo-name">
+                            <div id="preview-logo-wrapper" class="preview-logo-wrapper">
+                                <img id="preview-channel-logo" src="" alt="" onerror="handleLogoError(this, '')">
+                            </div>
+                            <h3 id="preview-channel-name" class="preview-title">Selecciona un canal</h3>
+                        </div>
+
+                        <p id="preview-channel-info" class="preview-info-text">
+                            Usa las flechas del control para navegar y pulsa <strong>OK / ENTER</strong> para ver en pantalla completa.
+                        </p>
+
+                        <div class="preview-actions">
+                            <button id="btn-fullscreen-trigger" class="btn-primary" tabindex="4">
+                                <span>📺 Ver en Pantalla Completa</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REMOTE INSTRUCTIONS HINT -->
+                <div class="remote-guide-card">
+                    <h4>Guía del Control Remoto:</h4>
+                    <div class="guide-row">
+                        <span class="key-tag">▲ ▼ ◄ ►</span>
+                        <span class="guide-desc">Navegar canales</span>
+                    </div>
+                    <div class="guide-row">
+                        <span class="key-tag">OK / ENTER</span>
+                        <span class="guide-desc">Reproducir / Pantalla Completa</span>
+                    </div>
+                    <div class="guide-row">
+                        <span class="key-tag">ATRAS / RETURN</span>
+                        <span class="guide-desc">Salir del reproductor / Menú</span>
+                    </div>
+                    <div class="guide-row">
+                        <span class="key-tag red">BOTON ROJO</span>
+                        <span class="guide-desc">Panel de Administrador M3U</span>
+                    </div>
+                </div>
+            </aside>
+
+        </main>
+
+    </div>
+
+    <!-- FULLSCREEN PLAYER OVERLAY -->
+    <div id="player-overlay" class="player-overlay">
+        <video id="main-video" autoplay playsinline></video>
+
+        <!-- VIDEO LOADING INDICATOR -->
+        <div id="player-buffering" class="player-buffering hidden">
+            <div class="large-spinner"></div>
+            <p>Cargando señal...</p>
+        </div>
+
+        <!-- ERROR OVERLAY -->
+        <div id="player-error" class="player-error hidden">
+            <div class="error-box">
+                <span class="error-icon">⚠️</span>
+                <h3>Canal temporalmente no disponible</h3>
+                <p id="player-error-msg">El stream no responde o la URL del M3U ha expirado.</p>
+                <div class="error-actions">
+                    <button id="btn-retry-stream" class="btn-secondary">Reintentar</button>
+                    <button id="btn-close-player" class="btn-primary">Volver a la lista</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ON-SCREEN DISPLAY (OSD INFO BANNER) -->
+        <div id="player-osd" class="player-osd">
+            <div class="osd-content">
+                <div class="osd-logo-container">
+                    <img id="osd-logo" src="" alt="" onerror="handleLogoError(this, '')">
+                </div>
+                <div class="osd-info">
+                    <div class="osd-meta">
+                        <span id="osd-number" class="osd-badge-number">#001</span>
+                        <span id="osd-group" class="osd-badge-group">Categoría</span>
+                        <span class="osd-badge-live">● EN VIVO</span>
+                        <span id="osd-clock" class="osd-clock">--:--</span>
+                    </div>
+                    <h2 id="osd-title" class="osd-channel-name">Nombre del Canal</h2>
+                </div>
+            </div>
+            <div class="osd-hints">
+                <span>◄ ► Cambiar canal rápido</span>
+                <span>ENTER Ocultar/Mostrar Info</span>
+                <span>ATRÁS Volver al Menú</span>
+            </div>
+        </div>
+
+        <!-- QUICK CHANNEL DRAWER (slides in from left) -->
+        <div id="quick-channels-drawer" class="quick-drawer hidden">
+            <div class="drawer-header">
+                <h3>Lista Rápida</h3>
+            </div>
+            <div id="drawer-channels-list" class="drawer-list">
+                <!-- Injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN MODAL (PIN PROTECTED) -->
+    <div id="admin-modal" class="modal-backdrop hidden">
+        <div class="admin-modal-card">
+            
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-icon">🔐</span>
+                    <h3>Administración de Lista M3U</h3>
+                </div>
+                <button id="btn-close-modal" class="btn-close">&times;</button>
+            </div>
+
+            <!-- STEP 1: PIN AUTHENTICATION -->
+            <div id="admin-pin-view" class="modal-body">
+                <p class="pin-instruction">Ingresa el PIN de Administrador para gestionar la lista:</p>
+                <div class="pin-input-wrap">
+                    <input type="password" id="admin-pin-input" maxlength="4" placeholder="••••" autocomplete="off">
+                    <button id="btn-submit-pin" class="btn-primary">Ingresar</button>
+                </div>
+                <p class="pin-hint">PIN por defecto: <strong>1234</strong></p>
+                <p id="pin-error-msg" class="error-text hidden">PIN Incorrecto. Intente de nuevo.</p>
+            </div>
+
+            <!-- STEP 2: M3U CONFIGURATION PANEL -->
+            <div id="admin-panel-view" class="modal-body hidden">
+                <div class="admin-status-box">
+                    <div class="status-row">
+                        <span>Estado:</span>
+                        <strong id="status-loaded-text" class="text-success">Lista activa</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Canales totales:</span>
+                        <strong id="status-channel-count">0</strong>
+                    </div>
+                </div>
+
+                <!-- TABS IN ADMIN: URL VS FILE -->
+                <div class="admin-tabs">
+                    <button id="tab-btn-url" class="admin-tab-btn active">🌐 Link Remoto (URL)</button>
+                    <button id="tab-btn-file" class="admin-tab-btn">📁 Archivo Local (.m3u)</button>
+                </div>
+
+                <!-- PANEL 1: REMOTE URL -->
+                <div id="admin-tab-url" class="admin-tab-content">
+                    <div class="form-group">
+                        <label for="m3u-url-input">URL de la Lista M3U:</label>
+                        <input type="text" id="m3u-url-input" placeholder="https://tu-servidor.com/lista.m3u" autocomplete="off">
+                        <small class="help-text">Inserta cualquier link M3U / M3U8 de internet. Se descargará y actualizará automáticamente.</small>
+                    </div>
+                    <button id="btn-save-m3u" class="btn-primary">
+                        <span>💾 Guardar y Cargar M3U</span>
+                    </button>
+                </div>
+
+                <!-- PANEL 2: LOCAL FILE UPLOAD -->
+                <div id="admin-tab-file" class="admin-tab-content hidden">
+                    <div class="form-group">
+                        <label>Subir archivo .m3u desde este dispositivo o USB:</label>
+                        <input type="file" id="m3u-file-input" accept=".m3u,.m3u8,.txt" style="display: none;">
+                        <button id="btn-trigger-file" type="button" class="btn-file-upload">
+                            <span>📁 Elegir archivo .m3u / .m3u8</span>
+                        </button>
+                        <span id="selected-file-label" class="file-name-label">Ningún archivo cargado</span>
+                    </div>
+                    <button id="btn-load-file" class="btn-primary" disabled>
+                        <span>📥 Procesar y Guardar Archivo</span>
+                    </button>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="server-url-input">Servicio en la Nube (URL del Portal):</label>
+                    <input type="text" id="server-url-input" placeholder="https://tu-app.onrender.com" autocomplete="off">
+                </div>
+
+                <div class="form-actions-secondary">
+                    <button id="btn-sync-cloud" class="btn-primary">
+                        <span>🔄 Sincronizar Canales</span>
+                    </button>
+                    <button id="btn-tv-logout" class="btn-danger">🚪 Cerrar Sesión</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TV LOGIN & MOBILE PAIRING SCREEN -->
+    <div id="tv-login-overlay" class="tv-login-overlay hidden">
+        <div class="tv-login-modal">
+            
+            <!-- BRAND HEADER -->
+            <div class="tv-login-brand">
+                <span class="brand-icon">⚡</span>
+                <h2>M3U<span class="brand-highlight">TV</span> PRO</h2>
+            </div>
+            <p class="tv-login-tagline">Disfruta de tus canales favoritos en vivo en tu Smart TV</p>
+
+            <div class="tv-login-split">
+
+                <!-- LEFT CARD: INSTANT QR CODE (MOBILE FAST PAIRING) -->
+                <div class="tv-login-card qr-card">
+                    <div class="card-badge">✨ ACCESO RÁPIDO RECOMENDADO</div>
+                    <h3>Escanea con tu Celular</h3>
+                    <p class="card-desc">Apunta con la cámara de tu teléfono para entrar al instante sin escribir:</p>
+                    
+                    <div class="qr-wrapper">
+                        <div id="tv-qr-box" class="qr-box">
+                            <!-- Dynamic QR rendered here -->
+                        </div>
+                    </div>
+
+                    <div class="code-info">
+                        <span class="code-label">O ingresa el código en tu móvil:</span>
+                        <span id="tv-pair-code" class="pair-code-text">------</span>
+                    </div>
+
+                    <div class="pair-status-indicator">
+                        <span class="pulse-dot"></span>
+                        <span id="tv-pair-status">Esperando conexión móvil...</span>
+                    </div>
+                </div>
+
+                <!-- DIVIDER -->
+                <div class="tv-split-divider">
+                    <div class="divider-line"></div>
+                    <span>O</span>
+                    <div class="divider-line"></div>
+                </div>
+
+                <!-- RIGHT CARD: TRADITIONAL REMOTE LOGIN -->
+                <div class="tv-login-card remote-card">
+                    <div class="card-badge secondary">CONTROL REMOTO</div>
+                    <h3>Ingreso con Mando</h3>
+                    <p class="card-desc">Ingresa tu cuenta registrada con el teclado en pantalla:</p>
+                    
+                    <div class="tv-login-form">
+                        <div class="form-group">
+                            <label for="tv-input-username">Usuario:</label>
+                            <input type="text" id="tv-input-username" placeholder="Tu usuario registrado" autocomplete="username">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tv-input-password">Contraseña:</label>
+                            <input type="password" id="tv-input-password" placeholder="••••••••" autocomplete="current-password">
+                        </div>
+
+                        <div id="tv-login-error" class="alert-error hidden"></div>
+
+                        <button id="btn-tv-login-submit" class="btn-primary" style="margin-top: 10px;">
+                            <span>🚀 Iniciar Sesión y Ver TV</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast hidden">Mensaje</div>
+
+    <script src="main.js?v=1.4.0"></script>
+</body>
+</html>
