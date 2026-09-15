@@ -13,22 +13,34 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://franciscojmaguilar11_db_user:8KHcxKKvUMbHeVk2@cluster0.rpmhjcl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 const DB_NAME = 'm3u_tv_database';
 
+let client = null;
 let db = null;
 let usersCol = null;
 let playlistsCol = null;
+let isConnecting = false;
 
-// Connect to MongoDB Atlas
+// Connect to MongoDB Atlas with auto-retry and timeout protection
 async function connectDB() {
+    if (db && usersCol && playlistsCol) return true;
+    if (isConnecting) return false;
+    isConnecting = true;
     try {
         console.log('Connecting to MongoDB Atlas...');
-        const client = new MongoClient(MONGO_URI);
+        client = new MongoClient(MONGO_URI, {
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 10000
+        });
         await client.connect();
         db = client.db(DB_NAME);
         usersCol = db.collection('users');
         playlistsCol = db.collection('playlists');
         console.log('Connected successfully to MongoDB Atlas (Database: ' + DB_NAME + ')');
+        isConnecting = false;
+        return true;
     } catch (err) {
-        console.error('MongoDB Atlas Connection Error:', err);
+        isConnecting = false;
+        console.error('MongoDB Atlas Connection Error:', err.message);
+        return false;
     }
 }
 connectDB();
@@ -37,6 +49,22 @@ connectDB();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Middleware to ensure DB connection before handling API routes
+app.use(async (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+        if (!usersCol || !playlistsCol) {
+            const connected = await connectDB();
+            if (!connected && !usersCol) {
+                return res.status(503).json({
+                    error: 'La base de datos aún no está conectada. Si estás en Render, asegúrate de habilitar 0.0.0.0/0 en Network Access de MongoDB Atlas.'
+                });
+            }
+        }
+    }
+    next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 // Also serve TV web app under /tv for testing or web client access
 app.use('/tv', express.static(path.join(__dirname, '..', 'M3UPLAYER')));
@@ -130,12 +158,12 @@ async function authenticate(req, res, next) {
 // Register
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password } = req.body || {};
         if (!username || !password) {
             return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
         }
 
-        const cleanUsername = username.trim().toLowerCase();
+        const cleanUsername = String(username).trim().toLowerCase();
         if (cleanUsername.length < 3) {
             return res.status(400).json({ error: 'El usuario debe tener al menos 3 caracteres' });
         }
@@ -146,7 +174,7 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
+        const passwordHash = await bcrypt.hash(String(password), salt);
         const token = crypto.randomBytes(32).toString('hex');
 
         const newUser = {
@@ -167,25 +195,25 @@ app.post('/api/auth/register', async (req, res) => {
         });
     } catch (err) {
         console.error('Register error:', err);
-        res.status(500).json({ error: 'Error en el servidor al registrar usuario' });
+        res.status(500).json({ error: 'Error al registrar usuario: ' + (err.message || 'Error del servidor') });
     }
 });
 
 // Login
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password } = req.body || {};
         if (!username || !password) {
             return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
         }
 
-        const cleanUsername = username.trim().toLowerCase();
+        const cleanUsername = String(username).trim().toLowerCase();
         const user = await usersCol.findOne({ username: cleanUsername });
-        if (!user) {
+        if (!user || !user.passwordHash) {
             return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
         }
 
-        const isValid = await bcrypt.compare(password, user.passwordHash);
+        const isValid = await bcrypt.compare(String(password), user.passwordHash);
         if (!isValid) {
             return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
         }
@@ -203,7 +231,7 @@ app.post('/api/auth/login', async (req, res) => {
         });
     } catch (err) {
         console.error('Login error:', err);
-        res.status(500).json({ error: 'Error en el servidor al iniciar sesión' });
+        res.status(500).json({ error: 'Error al iniciar sesión: ' + (err.message || 'Error del servidor') });
     }
 });
 

@@ -60,7 +60,7 @@ function initAuthTabs() {
         const submitBtn = document.getElementById('btn-auth-submit');
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Conectando con MongoDB...';
+        submitBtn.textContent = 'Procesando...';
 
         const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
 
@@ -71,7 +71,12 @@ function initAuthTabs() {
                 body: JSON.stringify({ username, password })
             });
 
-            const data = await res.json();
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (jsonErr) {
+                data = { error: 'Error de respuesta del servidor (Estado ' + res.status + ')' };
+            }
 
             if (!res.ok || data.error) {
                 throw new Error(data.error || 'Error en la solicitud');
