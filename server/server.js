@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // MongoDB Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://franciscojmaguilar11_db_user:8KHcxKKvUMbHeVk2@cluster0.rpmhjcl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://franciscojmaguilar11_db_user:8KHcxKKvUMbHeVk2@cluster0.rpmhjcl.mongodb.net/m3u_tv_database?retryWrites=true&w=majority&appName=Cluster0';
 const DB_NAME = 'm3u_tv_database';
 
 let client = null;
@@ -19,7 +19,7 @@ let usersCol = null;
 let playlistsCol = null;
 let isConnecting = false;
 
-// Connect to MongoDB Atlas with auto-retry and timeout protection
+// Connect to MongoDB Atlas with auto-retry, timeout protection and IPv4 forced
 async function connectDB() {
     if (db && usersCol && playlistsCol) return true;
     if (isConnecting) return false;
@@ -28,7 +28,8 @@ async function connectDB() {
         console.log('Connecting to MongoDB Atlas...');
         client = new MongoClient(MONGO_URI, {
             serverSelectionTimeoutMS: 5000,
-            connectTimeoutMS: 10000
+            connectTimeoutMS: 10000,
+            family: 4
         });
         await client.connect();
         db = client.db(DB_NAME);
@@ -40,6 +41,9 @@ async function connectDB() {
     } catch (err) {
         isConnecting = false;
         console.error('MongoDB Atlas Connection Error:', err.message);
+        if (err.message && (err.message.includes('alert number 80') || err.message.includes('tlsv1 alert internal error'))) {
+            console.error('⚠️ ATENCIÓN: Este error (SSL alert number 80) significa que MongoDB Atlas bloqueó la IP de Render. Debes agregar 0.0.0.0/0 en MongoDB Atlas -> Network Access.');
+        }
         return false;
     }
 }

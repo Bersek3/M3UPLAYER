@@ -23,7 +23,7 @@ let okKeyTimer = null;
 let isLongPress = false;
 
 const DEFAULT_ADMIN_PIN = "1234";
-const DEFAULT_SERVER_URL = "http://192.168.1.108:3000";
+const DEFAULT_SERVER_URL = "https://m3uplayer-yw7z.onrender.com";
 
 const STORAGE_KEY_TOKEN = "tv_user_token";
 const STORAGE_KEY_USERNAME = "tv_user_username";
