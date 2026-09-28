@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -79,15 +80,61 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 
 // Active user sessions (in-memory fast lookup + db persistence)
 const activeTokens = new Map(); // token -> { userId, username }
 
-// M3U Parser Helper
-function parseM3UContent(rawText) {
-    const lines = rawText.split(/\r?\n/);
+// Helper to derive a clean channel name from a stream URL
+function extractChannelNameFromUrl(url) {
+    try {
+        const u = new URL(url);
+        const parts = u.pathname.split('/').filter(Boolean);
+        if (parts.length > 0) {
+            let last = parts[parts.length - 1];
+            last = last.replace(/\.(m3u8|m3u|ts|mp4|mkv)$/i, '');
+            last = decodeURIComponent(last).replace(/[-_]/g, ' ').trim();
+            if (last && last.toLowerCase() !== 'master' && last.toLowerCase() !== 'index' && last.toLowerCase() !== 'playlist' && last.toLowerCase() !== 'live') {
+                return last.charAt(0).toUpperCase() + last.slice(1);
+            }
+            if (parts.length > 1) {
+                let prev = parts[parts.length - 2];
+                prev = decodeURIComponent(prev).replace(/[-_]/g, ' ').trim();
+                if (prev) return prev.charAt(0).toUpperCase() + prev.slice(1);
+            }
+        }
+    } catch (e) {}
+    return 'Canal En Vivo';
+}
+
+// Enhanced M3U / M3U8 Parser Helper
+function parseM3UContent(rawText, sourceUrl = '', defaultName = '') {
+    if (!rawText || typeof rawText !== 'string') return [];
+    
+    // Strip UTF-8 BOM and normalize newlines
+    let text = rawText.replace(/^\uFEFF/, '').trim();
+    if (!text) return [];
+
+    // Case 1: Direct single HLS Stream link (.m3u8 master playlist or media playlist)
+    const isDirectHlsStream = (
+        sourceUrl && (sourceUrl.toLowerCase().includes('.m3u8') || sourceUrl.toLowerCase().includes('.ts')) &&
+        (text.includes('#EXT-X-STREAM-INF') || text.includes('#EXT-X-TARGETDURATION') || text.includes('#EXT-X-MEDIA-SEQUENCE')) &&
+        !text.includes('group-title=') && !text.includes('tvg-name=')
+    );
+
+    if (isDirectHlsStream) {
+        const channelName = defaultName || extractChannelNameFromUrl(sourceUrl) || 'Canal M3U8 En Vivo';
+        return [{
+            number: '001',
+            name: channelName,
+            logo: '',
+            group: 'En Vivo',
+            url: sourceUrl
+        }];
+    }
+
+    const lines = text.split(/\r?\n/);
     const channels = [];
     let currentChannel = null;
     let counter = 1;
 
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        let line = lines[i].trim();
         if (!line) continue;
 
         if (line.startsWith('#EXTINF:')) {
@@ -97,7 +144,7 @@ function parseM3UContent(rawText) {
 
             // Extract tvg-logo
             const logoMatch = line.match(/tvg-logo=["']([^"']+)["']/i);
-            currentChannel.logo = logoMatch ? logoMatch[1] : '';
+            currentChannel.logo = logoMatch ? logoMatch[1].trim() : '';
 
             // Extract group-title
             const groupMatch = line.match(/group-title=["']([^"']+)["']/i);
@@ -109,17 +156,63 @@ function parseM3UContent(rawText) {
                 currentChannel.name = line.substring(commaIndex + 1).trim();
             } else {
                 const nameMatch = line.match(/tvg-name=["']([^"']+)["']/i);
-                currentChannel.name = nameMatch ? nameMatch[1] : `Canal ${currentChannel.number}`;
+                currentChannel.name = nameMatch ? nameMatch[1].trim() : `Canal ${currentChannel.number}`;
             }
 
+            // Cleanup surrounding quotes if present
+            currentChannel.name = currentChannel.name.replace(/^["']|["']$/g, '');
+
+        } else if (line.startsWith('#EXTGRP:')) {
+            // Group tag alternative
+            if (currentChannel && (!currentChannel.group || currentChannel.group === 'General')) {
+                currentChannel.group = line.substring(8).trim() || 'General';
+            }
         } else if (!line.startsWith('#')) {
+            // Stream URL
             if (currentChannel) {
-                currentChannel.url = line;
+                let streamUrl = line;
+                // Resolve relative URLs if base URL is provided
+                if (sourceUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://') && !streamUrl.startsWith('rtmp://')) {
+                    try {
+                        streamUrl = new URL(streamUrl, sourceUrl).href;
+                    } catch (e) {}
+                }
+                currentChannel.url = streamUrl;
                 channels.push(currentChannel);
                 currentChannel = null;
             }
         }
     }
+
+    // Case 2: If no #EXTINF was found, check if lines are direct URLs (plain playlist)
+    if (channels.length === 0) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('http://') || line.startsWith('https://')) {
+                const name = extractChannelNameFromUrl(line);
+                channels.push({
+                    number: String(counter).padStart(3, '0'),
+                    name: name,
+                    logo: '',
+                    group: 'General',
+                    url: line
+                });
+                counter++;
+            }
+        }
+    }
+
+    // Case 3: If still 0 channels, but sourceUrl is an active m3u8 link, treat sourceUrl as the channel!
+    if (channels.length === 0 && sourceUrl && (sourceUrl.includes('.m3u8') || sourceUrl.startsWith('http'))) {
+        channels.push({
+            number: '001',
+            name: defaultName || extractChannelNameFromUrl(sourceUrl) || 'Canal M3U8',
+            logo: '',
+            group: 'En Vivo',
+            url: sourceUrl
+        });
+    }
+
     return channels;
 }
 
@@ -162,19 +255,24 @@ async function authenticate(req, res, next) {
 // Register
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { username, password } = req.body || {};
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+        const { username, email, password } = req.body || {};
+        const identifier = (username || (email ? email.split('@')[0] : '')).trim().toLowerCase();
+        const cleanEmail = email ? String(email).trim().toLowerCase() : (identifier.includes('@') ? identifier : '');
+
+        if (!identifier || !password) {
+            return res.status(400).json({ error: 'Usuario/correo y contraseña requeridos' });
         }
 
-        const cleanUsername = String(username).trim().toLowerCase();
-        if (cleanUsername.length < 3) {
+        if (identifier.length < 3) {
             return res.status(400).json({ error: 'El usuario debe tener al menos 3 caracteres' });
         }
 
-        const existing = await usersCol.findOne({ username: cleanUsername });
+        const queryOr = [{ username: identifier }];
+        if (cleanEmail) queryOr.push({ email: cleanEmail });
+
+        const existing = await usersCol.findOne({ $or: queryOr });
         if (existing) {
-            return res.status(400).json({ error: 'El nombre de usuario ya está registrado' });
+            return res.status(400).json({ error: 'El usuario o correo electrónico ya está registrado' });
         }
 
         const salt = await bcrypt.genSalt(10);
@@ -182,20 +280,21 @@ app.post('/api/auth/register', async (req, res) => {
         const token = crypto.randomBytes(32).toString('hex');
 
         const newUser = {
-            username: cleanUsername,
+            username: identifier,
+            email: cleanEmail,
             passwordHash: passwordHash,
             token: token,
             createdAt: new Date()
         };
 
         const result = await usersCol.insertOne(newUser);
-        activeTokens.set(token, { userId: result.insertedId.toString(), username: cleanUsername });
+        activeTokens.set(token, { userId: result.insertedId.toString(), username: identifier });
 
         res.json({
             success: true,
             message: 'Usuario registrado con éxito',
             token: token,
-            username: cleanUsername
+            username: identifier
         });
     } catch (err) {
         console.error('Register error:', err);
@@ -206,32 +305,38 @@ app.post('/api/auth/register', async (req, res) => {
 // Login
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { username, password } = req.body || {};
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+        const { username, email, password } = req.body || {};
+        const identifier = String(email || username || '').trim().toLowerCase();
+        if (!identifier || !password) {
+            return res.status(400).json({ error: 'Correo o usuario y contraseña requeridos' });
         }
 
-        const cleanUsername = String(username).trim().toLowerCase();
-        const user = await usersCol.findOne({ username: cleanUsername });
+        const user = await usersCol.findOne({
+            $or: [
+                { username: identifier },
+                { email: identifier }
+            ]
+        });
+
         if (!user || !user.passwordHash) {
-            return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+            return res.status(401).json({ error: 'Usuario/correo o contraseña incorrectos' });
         }
 
         const isValid = await bcrypt.compare(String(password), user.passwordHash);
         if (!isValid) {
-            return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+            return res.status(401).json({ error: 'Usuario/correo o contraseña incorrectos' });
         }
 
         const token = crypto.randomBytes(32).toString('hex');
         await usersCol.updateOne({ _id: user._id }, { $set: { token: token, lastLogin: new Date() } });
 
-        activeTokens.set(token, { userId: user._id.toString(), username: cleanUsername });
+        activeTokens.set(token, { userId: user._id.toString(), username: user.username });
 
         res.json({
             success: true,
             message: 'Inicio de sesión correcto',
             token: token,
-            username: cleanUsername
+            username: user.username
         });
     } catch (err) {
         console.error('Login error:', err);
@@ -417,16 +522,17 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
         }
 
         const text = await response.text();
-        const parsedChannels = parseM3UContent(text);
+        const playlistName = name || 'Lista Web ' + (new Date().toLocaleDateString());
+        const parsedChannels = parseM3UContent(text, url, playlistName);
 
         if (parsedChannels.length === 0) {
-            return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U' });
+            return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U o M3U8' });
         }
 
         const playlistDoc = {
             userId: req.user.userId,
             username: req.user.username,
-            name: name || 'Lista Web ' + (new Date().toLocaleDateString()),
+            name: playlistName,
             type: 'url',
             sourceUrl: url,
             channelCount: parsedChannels.length,
@@ -438,7 +544,7 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
 
         res.json({
             success: true,
-            message: `¡Lista guardada con éxito! Se cargaron ${parsedChannels.length} canales.`,
+            message: `¡Lista guardada con éxito! Se cargaron ${parsedChannels.length} canal(es).`,
             playlistId: result.insertedId,
             channelCount: parsedChannels.length
         });
@@ -456,13 +562,12 @@ app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), as
         }
 
         const rawText = req.file.buffer.toString('utf-8');
-        const parsedChannels = parseM3UContent(rawText);
+        const playlistName = req.body.name || req.file.originalname || 'Lista Subida';
+        const parsedChannels = parseM3UContent(rawText, '', playlistName);
 
         if (parsedChannels.length === 0) {
-            return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U' });
+            return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U o M3U8' });
         }
-
-        const playlistName = req.body.name || req.file.originalname || 'Lista Subida';
 
         const playlistDoc = {
             userId: req.user.userId,
@@ -510,6 +615,85 @@ app.get('/api/status', (req, res) => {
         database: db ? 'connected' : 'connecting',
         serverTime: new Date()
     });
+});
+
+// ==========================================================================
+// M3U PROXY (allows Samsung TV to load playlists blocked by CORS)
+// GET /api/proxy/m3u?url=https://...
+// ==========================================================================
+app.get('/api/proxy/m3u', async (req, res) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+        return res.status(400).json({ error: 'Se requiere un parametro url valido (http/https)' });
+    }
+
+    try {
+        const proxyRes = await fetch(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) SamsungBrowser/2.1 Chrome/56.0.2924.0 TV Safari/538.1',
+                'Accept': '*/*',
+                'Accept-Language': 'es,en;q=0.8',
+                'Referer': targetUrl
+            },
+            redirect: 'follow'
+        });
+
+        if (!proxyRes.ok) {
+            return res.status(proxyRes.status).send('Error del servidor origen: ' + proxyRes.status);
+        }
+
+        const contentType = proxyRes.headers.get('content-type') || 'application/x-mpegurl';
+        const body = await proxyRes.text();
+
+        res.setHeader('Content-Type', contentType.includes('html') ? 'application/x-mpegurl' : contentType);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.send(body);
+
+    } catch (err) {
+        console.error('Proxy M3U error:', err.message);
+        res.status(502).send('Error al obtener la lista: ' + err.message);
+    }
+});
+
+// Public channels endpoint (allows TV to load channels without login)
+app.get('/api/channels/public', async (req, res) => {
+    try {
+        if (playlistsCol) {
+            const playlist = await playlistsCol.findOne({}, { sort: { updatedAt: -1 } });
+            if (playlist && Array.isArray(playlist.channels) && playlist.channels.length > 0) {
+                return res.json({
+                    success: true,
+                    name: playlist.name,
+                    channels: playlist.channels,
+                    channelCount: playlist.channels.length
+                });
+            }
+        }
+
+        const localM3U = path.join(__dirname, 'public', 'playlists', 'canales_chile.m3u');
+        if (fs.existsSync(localM3U)) {
+            const text = fs.readFileSync(localM3U, 'utf8');
+            const channels = parseM3UContent(text, '', 'Canales Chile');
+            return res.json({ success: true, name: 'Canales Chile', channels, channelCount: channels.length });
+        }
+
+        res.json({ success: false, channels: [] });
+    } catch (err) {
+        console.error('Public channels error:', err);
+        res.status(500).json({ error: 'Error al obtener canales públicos' });
+    }
+});
+
+// Raw default M3U playlist with open CORS
+app.get('/api/playlist/default.m3u', (req, res) => {
+    const localM3U = path.join(__dirname, 'public', 'playlists', 'canales_chile.m3u');
+    if (fs.existsSync(localM3U)) {
+        res.setHeader('Content-Type', 'application/x-mpegurl');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.sendFile(localM3U);
+    }
+    res.status(404).send('#EXTM3U\n');
 });
 
 // Fallback to Web Portal

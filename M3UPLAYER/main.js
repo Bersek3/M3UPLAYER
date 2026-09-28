@@ -1,20 +1,21 @@
 /**
- * ==========================================================================
- * M3U PLAYER PRO - SAMSUNG SMART TV (TIZEN OS)
- * Engine tailored for Samsung Smart Remote (SolarCell / BN59 series)
- * ==========================================================================
+ * M3U TV PRO - SAMSUNG SMART TV (TIZEN OS)
+ * State-of-the-Art Channel Selection, Dynamic Spotlight Hero,
+ * Bug-Free 2D D-Pad Navigation, and QR-Only Mobile Pairing via GitHub Pages
  */
 
-// Global State
+// ==========================================================================
+// STATE MANAGEMENT
+// ==========================================================================
 let allChannels = [];
 let filteredChannels = [];
-let categories = [];
+let categories = ['ALL'];
 let selectedCategory = 'ALL';
 let currentChannelIndex = 0;
 let activePlayingChannel = null;
 
 let hlsMainInstance = null;
-let isFullscreen = true; // ALWAYS START IN FULLSCREEN
+let isFullscreen = false;
 let osdHideTimeout = null;
 let isDrawerOpen = false;
 let drawerFocusedIndex = 0;
@@ -22,8 +23,12 @@ let drawerFocusedIndex = 0;
 let okKeyTimer = null;
 let isLongPress = false;
 
+let streamRetryCount = 0;
+const MAX_STREAM_RETRIES = 3;
+
 const DEFAULT_ADMIN_PIN = "1234";
 const DEFAULT_SERVER_URL = "https://m3uplayer-yw7z.onrender.com";
+const GITHUB_PAGES_PAIR_URL = "https://bersek3.github.io/M3UPLAYER/pair.html";
 
 const STORAGE_KEY_TOKEN = "tv_user_token";
 const STORAGE_KEY_USERNAME = "tv_user_username";
@@ -33,20 +38,25 @@ const STORAGE_KEY_CHANNELS = "m3u_cached_channels";
 const STORAGE_KEY_LAST_CHANNEL = "m3u_last_played_index";
 const STORAGE_KEY_LAST_CHANNEL_URL = "m3u_last_played_url";
 
+let currentNavZone = 'GRID'; // 'GRID', 'CATEGORIES', 'TOPBAR'
+let categoryNavIndex = 0;
+
+let pairPollInterval = null;
+const brokenLogos = new Set();
+
 function getServerUrl() {
     const saved = localStorage.getItem(STORAGE_KEY_SERVER);
     if (saved) return saved;
-    // Auto-detect if served over HTTP/HTTPS from a cloud host (Render, etc.)
     if (typeof window !== 'undefined' && window.location && window.location.origin) {
         const origin = window.location.origin;
-        if (origin.indexOf('http') === 0 && origin.indexOf('file://') === -1) {
+        if (origin.indexOf('http') === 0 && origin.indexOf('file://') === -1 && !origin.includes('github.io')) {
             return origin;
         }
     }
     return DEFAULT_SERVER_URL;
 }
 
-// High quality curated demo channels (Public & Free streams)
+// Curated high quality fallback demo channels
 const DEMO_PLAYLIST = `#EXTM3U
 #EXTINF:-1 tvg-id="1" tvg-name="NASA TV HD" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/300px-NASA_logo.svg.png" group-title="Ciencia",NASA TV HD
 https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8
@@ -56,7 +66,7 @@ https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8
 https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8
 #EXTINF:-1 tvg-id="4" tvg-name="Euronews Español" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Euronews_2016_logo.svg/320px-Euronews_2016_logo.svg.png" group-title="Noticias",Euronews Español
 https://euronews-euronews-spanish-1-es.samsung.wurl.tv/playlist.m3u8
-#EXTINF:-1 tvg-id="5" tvg-name="Big Buck Bunny Cine" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/300px-Big_buck_bunny_poster_big.jpg" group-title="Cine",Big Buck Bunny (4K/FHD)
+#EXTINF:-1 tvg-id="5" tvg-name="Big Buck Bunny" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/300px-Big_buck_bunny_poster_big.jpg" group-title="Cine",Big Buck Bunny (FHD)
 https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
 #EXTINF:-1 tvg-id="6" tvg-name="Sintel Animation" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Sintel_poster.jpg/300px-Sintel_poster.jpg" group-title="Cine",Sintel Open Movie
 https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
@@ -73,35 +83,73 @@ window.addEventListener('DOMContentLoaded', () => {
     initClock();
     initTizenRemoteKeys();
     initEventListeners();
+    updateUserSessionUI();
 
-    // Check if user is logged in
     const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-    if (!token) {
-        showTvLoginScreen();
+    const customUrl = localStorage.getItem(STORAGE_KEY_URL);
+    const cachedChannels = localStorage.getItem(STORAGE_KEY_CHANNELS);
+
+    if (token) {
+        // User is logged in: fetch their channels from backend!
+        fetchChannelsFromBackend(true);
+    } else if (customUrl) {
+        // User configured a custom M3U URL in admin settings
+        loadCustomM3UUrl(customUrl);
+    } else if (cachedChannels) {
+        try {
+            allChannels = JSON.parse(cachedChannels);
+            if (allChannels && allChannels.length > 0) {
+                finishPlaylistLoad("Canales Guardados");
+            } else {
+                loadDefaultPlaylist();
+            }
+        } catch (e) {
+            loadDefaultPlaylist();
+        }
     } else {
-        fetchChannelsFromBackend();
+        // First boot without token: load default channels and offer QR pairing!
+        loadDefaultPlaylist();
+        // Show QR pairing overlay so user can easily link their account via mobile
+        showTvLoginScreen();
     }
 });
 
+// Update topbar UI based on active session
+function updateUserSessionUI() {
+    const token = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const username = localStorage.getItem(STORAGE_KEY_USERNAME);
+    const accountBtn = document.getElementById('btn-user-account');
+    const accountIcon = document.getElementById('account-btn-icon');
+    const accountLabel = document.getElementById('account-btn-label');
+    const logoutBtn = document.getElementById('btn-tv-logout');
+    const statusUser = document.getElementById('status-user-text');
+
+    if (token && username) {
+        if (accountIcon) accountIcon.textContent = "👤";
+        if (accountLabel) accountLabel.textContent = `@${username}`;
+        if (logoutBtn) logoutBtn.classList.remove('hidden');
+        if (statusUser) statusUser.textContent = `@${username} (Activo)`;
+    } else {
+        if (accountIcon) accountIcon.textContent = "📱";
+        if (accountLabel) accountLabel.textContent = "Vincular Celular (QR)";
+        if (logoutBtn) logoutBtn.classList.add('hidden');
+        if (statusUser) statusUser.textContent = "Sin cuenta vinculada";
+    }
+}
+
 // ==========================================================================
-// TIZEN REMOTE KEYS REGISTRATION (Optimized for Samsung Smart Remote)
+// TIZEN REMOTE KEYS REGISTRATION (Samsung Smart Remote / SolarCell BN59)
 // ==========================================================================
 function initTizenRemoteKeys() {
     if (window.tizen && tizen.tvinputdevice) {
         try {
-            // Register Channel rocker keys (CH Up & CH Down)
             tizen.tvinputdevice.registerKey("ChannelUp");
             tizen.tvinputdevice.registerKey("ChannelDown");
-            
-            // Register Color keys & Menu
-            tizen.tvinputdevice.registerKey("ColorF0Red");     // Red Color Button (via 123 button)
+            tizen.tvinputdevice.registerKey("ColorF0Red");     // Red Color Button (via 123)
             tizen.tvinputdevice.registerKey("ColorF1Green");   // Green Color Button
-            
-            // Register Play/Pause media keys
             tizen.tvinputdevice.registerKey("MediaPlay");
             tizen.tvinputdevice.registerKey("MediaPause");
             tizen.tvinputdevice.registerKey("MediaPlayPause");
-            
             console.log("Samsung Smart Remote Keys registered successfully.");
         } catch (e) {
             console.warn("Could not register Tizen remote keys:", e);
@@ -118,7 +166,7 @@ function initClock() {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const timeStr = `${hours}:${minutes}`;
-        
+
         const clockEl = document.getElementById('clock-display');
         const osdClockEl = document.getElementById('osd-clock');
         if (clockEl) clockEl.textContent = timeStr;
@@ -129,10 +177,86 @@ function initClock() {
 }
 
 // ==========================================================================
-// M3U PARSER
+// M3U / M3U8 PARSER (With UTF-8 Sanitation & Clean Categories)
 // ==========================================================================
-function parseM3U(rawContent) {
-    const lines = rawContent.split(/\r?\n/);
+function sanitizeText(str) {
+    if (!str) return '';
+    try {
+        return decodeURIComponent(escape(str));
+    } catch (e) {
+        return str
+            .replace(/Ã‘/g, 'Ñ').replace(/Ã±/g, 'ñ')
+            .replace(/Ã¡/g, 'á').replace(/Ã©/g, 'é')
+            .replace(/Ã­/g, 'í').replace(/Ã³/g, 'ó')
+            .replace(/Ãº/g, 'ú').replace(/Ã/g, 'Í');
+    }
+}
+
+function normalizeCategoryName(group) {
+    if (!group) return 'General';
+    let g = sanitizeText(group).trim();
+    if (!g) return 'General';
+
+    // Capitalize first letter
+    g = g.charAt(0).toUpperCase() + g.slice(1);
+
+    // Normalize common English/Spanish tags
+    const lower = g.toLowerCase();
+    if (lower === 'news') return 'Noticias';
+    if (lower === 'music') return 'Música';
+    if (lower === 'sports') return 'Deportes';
+    if (lower === 'movies' || lower === 'cinema') return 'Cine';
+    if (lower === 'kids') return 'Infantil';
+
+    return g;
+}
+
+function extractChannelNameFromUrl(url) {
+    try {
+        const u = new URL(url);
+        const parts = u.pathname.split('/').filter(Boolean);
+        if (parts.length > 0) {
+            let last = parts[parts.length - 1];
+            last = last.replace(/\.(m3u8|m3u|ts|mp4|mkv)$/i, '');
+            last = decodeURIComponent(last).replace(/[-_]/g, ' ').trim();
+            if (last && last.toLowerCase() !== 'master' && last.toLowerCase() !== 'index' && last.toLowerCase() !== 'playlist' && last.toLowerCase() !== 'live') {
+                return last.charAt(0).toUpperCase() + last.slice(1);
+            }
+            if (parts.length > 1) {
+                let prev = parts[parts.length - 2];
+                prev = decodeURIComponent(prev).replace(/[-_]/g, ' ').trim();
+                if (prev) return prev.charAt(0).toUpperCase() + prev.slice(1);
+            }
+        }
+    } catch (e) {}
+    return 'Canal En Vivo';
+}
+
+function parseM3U(rawContent, sourceUrl = '', defaultName = '') {
+    if (!rawContent || typeof rawContent !== 'string') return [];
+
+    let text = rawContent.replace(/^\uFEFF/, '').trim();
+    if (!text) return [];
+
+    // Direct single HLS Stream link (.m3u8 master playlist or media playlist)
+    const isDirectHlsStream = (
+        sourceUrl && (sourceUrl.toLowerCase().includes('.m3u8') || sourceUrl.toLowerCase().includes('.ts')) &&
+        (text.includes('#EXT-X-STREAM-INF') || text.includes('#EXT-X-TARGETDURATION') || text.includes('#EXT-X-MEDIA-SEQUENCE')) &&
+        !text.includes('group-title=') && !text.includes('tvg-name=')
+    );
+
+    if (isDirectHlsStream) {
+        const channelName = defaultName || extractChannelNameFromUrl(sourceUrl) || 'Canal M3U8 En Vivo';
+        return [{
+            number: '001',
+            name: sanitizeText(channelName),
+            logo: '',
+            group: 'En Vivo',
+            url: sourceUrl
+        }];
+    }
+
+    const lines = text.split(/\r?\n/);
     const channels = [];
     let currentChannel = null;
     let channelNumberCounter = 1;
@@ -143,265 +267,77 @@ function parseM3U(rawContent) {
 
         if (line.startsWith('#EXTINF:')) {
             currentChannel = {};
-            
-            // Number badge
             currentChannel.number = String(channelNumberCounter).padStart(3, '0');
             channelNumberCounter++;
 
-            // Logo
+            // Extract tvg-logo
             const logoMatch = line.match(/tvg-logo=["']([^"']+)["']/i);
-            currentChannel.logo = logoMatch ? logoMatch[1] : '';
+            currentChannel.logo = logoMatch ? logoMatch[1].trim() : '';
 
-            // Group / Category
+            // Extract group-title
             const groupMatch = line.match(/group-title=["']([^"']+)["']/i);
-            currentChannel.group = groupMatch ? groupMatch[1].trim() : 'General';
+            currentChannel.group = normalizeCategoryName(groupMatch ? groupMatch[1].trim() : 'General');
 
-            // Channel name
+            // Extract channel name
             const commaIndex = line.lastIndexOf(',');
             if (commaIndex !== -1 && commaIndex < line.length - 1) {
-                currentChannel.name = line.substring(commaIndex + 1).trim();
+                currentChannel.name = sanitizeText(line.substring(commaIndex + 1).trim());
             } else {
                 const nameMatch = line.match(/tvg-name=["']([^"']+)["']/i);
-                currentChannel.name = nameMatch ? nameMatch[1] : `Canal ${currentChannel.number}`;
+                currentChannel.name = nameMatch ? sanitizeText(nameMatch[1].trim()) : `Canal ${currentChannel.number}`;
             }
 
+            // Cleanup quotes
+            currentChannel.name = currentChannel.name.replace(/^["']|["']$/g, '');
+
+        } else if (line.startsWith('#EXTGRP:')) {
+            if (currentChannel && (!currentChannel.group || currentChannel.group === 'General')) {
+                currentChannel.group = normalizeCategoryName(line.substring(8).trim());
+            }
         } else if (!line.startsWith('#')) {
             if (currentChannel) {
-                currentChannel.url = line;
+                let streamUrl = line;
+                if (sourceUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://') && !streamUrl.startsWith('rtmp://')) {
+                    try {
+                        streamUrl = new URL(streamUrl, sourceUrl).href;
+                    } catch (e) {}
+                }
+                currentChannel.url = streamUrl;
                 channels.push(currentChannel);
                 currentChannel = null;
             }
         }
     }
 
+    // Plain text list of URLs
+    if (channels.length === 0) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('http://') || line.startsWith('https://')) {
+                const name = extractChannelNameFromUrl(line);
+                channels.push({
+                    number: String(channelNumberCounter).padStart(3, '0'),
+                    name: sanitizeText(name),
+                    logo: '',
+                    group: 'General',
+                    url: line
+                });
+                channelNumberCounter++;
+            }
+        }
+    }
+
+    if (channels.length === 0 && sourceUrl && (sourceUrl.includes('.m3u8') || sourceUrl.startsWith('http'))) {
+        channels.push({
+            number: '001',
+            name: defaultName || extractChannelNameFromUrl(sourceUrl) || 'Canal M3U8',
+            logo: '',
+            group: 'En Vivo',
+            url: sourceUrl
+        });
+    }
+
     return channels;
-}
-
-// ==========================================================================
-// TV LOGIN & AUTHENTICATION (DUAL-CARD: QR CODE PAIRING + REMOTE LOGIN)
-// ==========================================================================
-let pairPollInterval = null;
-
-function isTvLoginActive() {
-    const overlay = document.getElementById('tv-login-overlay');
-    return overlay && !overlay.classList.contains('hidden');
-}
-
-function showTvLoginScreen() {
-    const overlay = document.getElementById('tv-login-overlay');
-    const portalUrlEl = document.getElementById('tv-login-portal-url');
-    const usernameInput = document.getElementById('tv-input-username');
-    const passwordInput = document.getElementById('tv-input-password');
-    const errorEl = document.getElementById('tv-login-error');
-
-    if (overlay) overlay.classList.remove('hidden');
-    const currentServerUrl = getServerUrl();
-    if (portalUrlEl) portalUrlEl.textContent = currentServerUrl;
-    if (errorEl) errorEl.classList.add('hidden');
-    if (usernameInput) {
-        usernameInput.value = '';
-    }
-    if (passwordInput) passwordInput.value = '';
-
-    // Stop video playback if active
-    const video = document.getElementById('main-video');
-    if (video) {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-    }
-    if (hlsMainInstance) {
-        hlsMainInstance.destroy();
-        hlsMainInstance = null;
-    }
-    const playerOverlay = document.getElementById('player-overlay');
-    if (playerOverlay) playerOverlay.classList.add('hidden');
-
-    // Initiate QR Pairing Workflow
-    startQrPairingWorkflow();
-}
-
-function hideTvLoginScreen() {
-    stopQrPairingWorkflow();
-    const overlay = document.getElementById('tv-login-overlay');
-    if (overlay) overlay.classList.add('hidden');
-}
-
-function stopQrPairingWorkflow() {
-    if (pairPollInterval) {
-        clearInterval(pairPollInterval);
-        pairPollInterval = null;
-    }
-}
-
-function startQrPairingWorkflow() {
-    stopQrPairingWorkflow();
-
-    const qrBox = document.getElementById('tv-qr-box');
-    const pairCodeEl = document.getElementById('tv-pair-code');
-
-    if (pairCodeEl) pairCodeEl.textContent = "------";
-    if (qrBox) {
-        qrBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:14px;text-align:center;">Generando código seguro...</div>';
-    }
-
-    const serverUrl = getServerUrl();
-
-    fetch(serverUrl + '/api/auth/pair/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    })
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-        if (!isTvLoginActive()) return;
-
-        if (data && data.success && data.pairCode) {
-            const pairCode = data.pairCode;
-            if (pairCodeEl) pairCodeEl.textContent = pairCode;
-
-            const mobilePairUrl = serverUrl + '/pair.html?code=' + encodeURIComponent(pairCode);
-
-            if (qrBox) {
-                qrBox.innerHTML = '';
-                try {
-                    if (typeof QRCode !== 'undefined') {
-                        new QRCode(qrBox, {
-                            text: mobilePairUrl,
-                            width: 170,
-                            height: 170,
-                            colorDark: "#0f172a",
-                            colorLight: "#ffffff",
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                    } else {
-                        qrBox.innerHTML = '<div style="padding:10px;font-size:12px;color:#94a3b8;text-align:center;">Abre en tu móvil:<br><strong style="color:#38bdf8;">' + mobilePairUrl + '</strong></div>';
-                    }
-                } catch(e) {
-                    console.warn("QR Render error:", e);
-                    qrBox.innerHTML = '<div style="padding:10px;font-size:12px;color:#94a3b8;text-align:center;">Abre en tu móvil:<br><strong style="color:#38bdf8;">' + mobilePairUrl + '</strong></div>';
-                }
-            }
-
-            // Start polling status every 2 seconds
-            pairPollInterval = setInterval(function() {
-                checkPairStatus(pairCode);
-            }, 2000);
-        } else {
-            if (qrBox) {
-                qrBox.innerHTML = '<div style="padding:15px;color:#f87171;font-size:13px;text-align:center;">No se pudo generar el código QR.<br>Usa el acceso con control remoto.</div>';
-            }
-        }
-    })
-    .catch(function(err) {
-        console.warn("Pair request error:", err);
-        if (qrBox) {
-            qrBox.innerHTML = '<div style="padding:15px;color:#f87171;font-size:13px;text-align:center;">Sin conexión al servicio.<br>Usa el acceso con control remoto.</div>';
-        }
-    });
-}
-
-function checkPairStatus(pairCode) {
-    if (!isTvLoginActive()) {
-        stopQrPairingWorkflow();
-        return;
-    }
-
-    const serverUrl = getServerUrl();
-    fetch(serverUrl + '/api/auth/pair/status?code=' + encodeURIComponent(pairCode))
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-        if (data && data.status === 'approved' && data.token) {
-            stopQrPairingWorkflow();
-            localStorage.setItem(STORAGE_KEY_TOKEN, data.token);
-            localStorage.setItem(STORAGE_KEY_USERNAME, data.username || 'Usuario');
-            hideTvLoginScreen();
-            showToast("¡Dispositivo vinculado con éxito!");
-            fetchChannelsFromBackend(true);
-        } else if (data && data.status === 'expired') {
-            stopQrPairingWorkflow();
-            startQrPairingWorkflow();
-        }
-    })
-    .catch(function(err) {
-        // Polling network drop
-    });
-}
-
-function handleTvLogin() {
-    const usernameInput = document.getElementById('tv-input-username');
-    const passwordInput = document.getElementById('tv-input-password');
-    const errorEl = document.getElementById('tv-login-error');
-    const submitBtn = document.getElementById('btn-tv-login-submit');
-
-    if (!usernameInput || !passwordInput) return;
-
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value.trim();
-
-    if (!username || !password) {
-        if (errorEl) {
-            errorEl.textContent = "Por favor ingresa usuario y contraseña.";
-            errorEl.classList.remove('hidden');
-        }
-        return;
-    }
-
-    if (errorEl) errorEl.classList.add('hidden');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = "<span>⏳ Verificando credenciales...</span>";
-    }
-
-    const serverUrl = getServerUrl();
-
-    fetch(serverUrl + '/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username, password: password })
-    })
-    .then(function(res) {
-        return res.json();
-    })
-    .then(function(data) {
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = "<span>🚀 Iniciar Sesión y Ver TV</span>";
-        }
-
-        if (data && data.success && data.token) {
-            stopQrPairingWorkflow();
-            localStorage.setItem(STORAGE_KEY_TOKEN, data.token);
-            localStorage.setItem(STORAGE_KEY_USERNAME, data.username);
-            hideTvLoginScreen();
-            showToast("¡Bienvenido " + data.username + "!");
-            fetchChannelsFromBackend();
-        } else {
-            if (errorEl) {
-                errorEl.textContent = (data && data.error) ? data.error : "Usuario o contraseña incorrectos.";
-                errorEl.classList.remove('hidden');
-            }
-        }
-    })
-    .catch(function(err) {
-        console.warn("Login fetch error:", err);
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = "<span>🚀 Iniciar Sesión y Ver TV</span>";
-        }
-        if (errorEl) {
-            errorEl.textContent = "No se pudo conectar al servicio. Verifica tu conexión a internet.";
-            errorEl.classList.remove('hidden');
-        }
-    });
-}
-
-function handleTvLogout() {
-    stopQrPairingWorkflow();
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_USERNAME);
-    closeAdminModal();
-    showTvLoginScreen();
-    showToast("Sesión cerrada.");
 }
 
 // ==========================================================================
@@ -413,12 +349,12 @@ function fetchChannelsFromBackend(showNotification) {
     const serverUrl = getServerUrl();
 
     if (!token) {
-        showTvLoginScreen();
+        loadDefaultPlaylist();
         return;
     }
 
     if (showNotification) {
-        showToast("Cargando tus canales...");
+        showToast("Sincronizando canales de tu cuenta...");
     }
 
     fetch(serverUrl + '/api/user/channels', {
@@ -426,61 +362,139 @@ function fetchChannelsFromBackend(showNotification) {
             'Authorization': 'Bearer ' + token
         }
     })
-    .then(function(res) {
-        if (res.status === 401) {
-            handleTvLogout();
-            throw new Error("Sesión expirada");
-        }
+    .then(res => {
         if (!res.ok) throw new Error("Status: " + res.status);
         return res.json();
     })
-    .then(function(data) {
+    .then(data => {
         if (data && Array.isArray(data.channels) && data.channels.length > 0) {
-            allChannels = data.channels;
+            allChannels = data.channels.map((ch, idx) => ({
+                number: ch.number || String(idx + 1).padStart(3, '0'),
+                name: sanitizeText(ch.name),
+                logo: ch.logo || '',
+                group: normalizeCategoryName(ch.group),
+                url: ch.url
+            }));
             localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
-            finishPlaylistLoad("Mis Canales (" + (data.username || username) + ")");
+            finishPlaylistLoad(`Cuenta @${data.username || username}`);
             if (showNotification) {
-                showToast("¡Listo! " + allChannels.length + " canales cargados");
+                showToast(`¡Listo! ${allChannels.length} canales sincronizados`);
             }
         } else {
-            showToast("No tienes canales guardados. Agrega listas desde tu móvil o PC.");
-            const cachedData = localStorage.getItem(STORAGE_KEY_CHANNELS);
-            if (cachedData) {
-                try {
-                    allChannels = JSON.parse(cachedData);
-                    finishPlaylistLoad("Caché local (" + username + ")");
-                } catch(e) {
-                    useDemoPlaylist();
-                }
-            } else {
-                useDemoPlaylist();
-            }
+            loadDefaultPlaylist();
         }
     })
-    .catch(function(err) {
-        console.warn("Fallo al conectar con el servicio:", err);
+    .catch(err => {
+        console.warn("Fallo al conectar con el servidor:", err);
         const cachedData = localStorage.getItem(STORAGE_KEY_CHANNELS);
         if (cachedData) {
             try {
                 allChannels = JSON.parse(cachedData);
-                finishPlaylistLoad("Modo Sin Conexión (Caché)");
-                showToast("Sin conexión al servicio. Mostrando canales guardados.");
-            } catch(e) {
-                useDemoPlaylist();
+                finishPlaylistLoad("Caché Local");
+            } catch (e) {
+                loadDefaultPlaylist();
             }
         } else {
-            useDemoPlaylist();
+            loadDefaultPlaylist();
         }
     });
 }
 
-function loadPlaylist() {
-    fetchChannelsFromBackend();
+function loadCustomM3UUrl(url) {
+    if (!url) return;
+    showToast("Cargando lista M3U8...");
+
+    const serverUrl = getServerUrl();
+    const proxyUrl = serverUrl + '/api/proxy/m3u?url=' + encodeURIComponent(url);
+
+    fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 TV Safari/538.1',
+            'Accept': '*/*'
+        }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.text();
+    })
+    .then(text => {
+        const parsed = parseM3U(text, url, 'Lista M3U8');
+        if (parsed.length > 0) {
+            allChannels = parsed;
+            localStorage.setItem(STORAGE_KEY_URL, url);
+            localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
+            finishPlaylistLoad("Lista M3U8");
+            showToast("¡Éxito! " + allChannels.length + " canales cargados");
+        } else {
+            throw new Error("Sin canales válidos");
+        }
+    })
+    .catch(err => {
+        console.warn("Fetch directo falló, probando proxy:", err.message);
+        fetch(proxyUrl)
+        .then(res => {
+            if (!res.ok) throw new Error("Proxy HTTP " + res.status);
+            return res.text();
+        })
+        .then(text => {
+            const parsed = parseM3U(text, url, 'Lista M3U8');
+            if (parsed.length > 0) {
+                allChannels = parsed;
+                localStorage.setItem(STORAGE_KEY_URL, url);
+                localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
+                finishPlaylistLoad("Lista M3U8 (proxy)");
+                showToast("¡Éxito! " + allChannels.length + " canales (vía proxy)");
+            } else {
+                throw new Error("Sin canales vía proxy");
+            }
+        })
+        .catch(err2 => {
+            console.warn("Proxy también falló:", err2.message);
+            if (url.toLowerCase().includes('.m3u8') || url.toLowerCase().includes('.ts')) {
+                allChannels = [{
+                    number: '001',
+                    name: extractChannelNameFromUrl(url) || 'Canal M3U8 En Vivo',
+                    logo: '',
+                    group: 'En Vivo',
+                    url: url
+                }];
+                localStorage.setItem(STORAGE_KEY_URL, url);
+                localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
+                finishPlaylistLoad("Canal M3U8 Directo");
+            } else {
+                showToast("Error: No se pudo cargar la lista. Revisa la URL.");
+                useDemoPlaylist();
+            }
+        });
+    });
+}
+
+function loadDefaultPlaylist() {
+    // 1. Try bundled channels.m3u in the Tizen app package
+    fetch('channels.m3u')
+    .then(res => {
+        if (!res.ok) throw new Error("channels.m3u no encontrado localmente");
+        return res.text();
+    })
+    .then(text => {
+        const parsed = parseM3U(text, 'channels.m3u', 'Canales Chile');
+        if (parsed.length > 0) {
+            allChannels = parsed;
+            localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
+            finishPlaylistLoad("Canales Chile (" + allChannels.length + ")");
+            return;
+        }
+        throw new Error("Sin canales válidos en channels.m3u");
+    })
+    .catch(err => {
+        console.log("Cargando canales demo fallback:", err.message);
+        useDemoPlaylist();
+    });
 }
 
 function useDemoPlaylist() {
     allChannels = parseM3U(DEMO_PLAYLIST);
-    finishPlaylistLoad("Lista Pública Demo");
+    finishPlaylistLoad("Canales Demo");
 }
 
 function finishPlaylistLoad(sourceInfo) {
@@ -489,13 +503,12 @@ function finishPlaylistLoad(sourceInfo) {
     filterChannels();
     renderDrawerChannels();
 
-    // Update Admin Status in modal
     const statusText = document.getElementById('status-loaded-text');
     const statusCount = document.getElementById('status-channel-count');
     if (statusText) statusText.textContent = "Activa (" + sourceInfo + ")";
     if (statusCount) statusCount.textContent = allChannels.length;
 
-    // Recall last played channel by URL or index
+    // Recall last played channel
     let savedIndex = 0;
     const lastPlayedUrl = localStorage.getItem(STORAGE_KEY_LAST_CHANNEL_URL);
     if (lastPlayedUrl && filteredChannels && filteredChannels.length > 0) {
@@ -512,10 +525,9 @@ function finishPlaylistLoad(sourceInfo) {
         }
     }
 
-    // ALWAYS OPEN IMMEDIATELY IN FULLSCREEN!
-    if (filteredChannels.length > 0) {
-        selectAndPlayChannel(savedIndex, true);
-    }
+    currentChannelIndex = savedIndex;
+    updateFocusedCard();
+    updateSpotlightBanner(filteredChannels[currentChannelIndex]);
 }
 
 function extractCategories() {
@@ -527,7 +539,7 @@ function extractCategories() {
 }
 
 // ==========================================================================
-// RENDERING (Categories, Grid & Drawer)
+// RENDERING & UI ENGINE
 // ==========================================================================
 function renderCategories() {
     const container = document.getElementById('category-list');
@@ -536,10 +548,15 @@ function renderCategories() {
 
     categories.forEach((cat, idx) => {
         const chip = document.createElement('button');
-        chip.className = `category-chip ${cat === selectedCategory ? 'active' : ''}`;
-        chip.textContent = cat === 'ALL' ? '⭐ Todos' : cat;
+        const isActive = (cat === selectedCategory);
+        chip.className = `category-chip ${isActive ? 'active' : ''}`;
         chip.dataset.category = cat;
         chip.dataset.index = idx;
+
+        // Count channels in this category
+        const count = (cat === 'ALL') ? allChannels.length : allChannels.filter(c => c.group === cat).length;
+        const icon = getCategoryIcon(cat);
+        chip.innerHTML = `${icon} <span>${cat === 'ALL' ? 'Todos' : cat}</span> <span class="count-badge" style="padding:1px 6px; font-size:11px;">${count}</span>`;
 
         chip.addEventListener('click', () => {
             setCategory(cat);
@@ -547,6 +564,18 @@ function renderCategories() {
 
         container.appendChild(chip);
     });
+}
+
+function getCategoryIcon(cat) {
+    const l = cat.toLowerCase();
+    if (cat === 'ALL') return '⭐';
+    if (l.includes('noticia') || l.includes('news')) return '📰';
+    if (l.includes('deporte') || l.includes('sport')) return '⚽';
+    if (l.includes('cine') || l.includes('movie') || l.includes('film')) return '🎬';
+    if (l.includes('música') || l.includes('musica') || l.includes('music')) return '🎵';
+    if (l.includes('ciencia') || l.includes('doc')) return '🔬';
+    if (l.includes('infantil') || l.includes('kid')) return '🧸';
+    return '📺';
 }
 
 function setCategory(cat) {
@@ -560,6 +589,7 @@ function setCategory(cat) {
         catTitle.textContent = cat === 'ALL' ? 'Todos los Canales' : `Canales: ${cat}`;
     }
 
+    currentChannelIndex = 0;
     filterChannels();
     renderDrawerChannels();
 }
@@ -578,16 +608,16 @@ function filterChannels() {
         return matchesCategory && matchesQuery;
     });
 
-    renderChannelsGrid();
-}
+    if (currentChannelIndex >= filteredChannels.length) {
+        currentChannelIndex = 0;
+    }
 
-// Performance constants for Smart TV
-const CHANNELS_CHUNK_SIZE = 40;
-const DRAWER_CHUNK_SIZE = 40;
-const brokenLogos = new Set();
-let renderedGridCount = 0;
-let renderedDrawerCount = 0;
-let channelSwitchDebounceTimer = null;
+    renderChannelsGrid();
+
+    if (filteredChannels.length > 0) {
+        updateSpotlightBanner(filteredChannels[currentChannelIndex]);
+    }
+}
 
 function isValidLogoUrl(url) {
     if (!url || typeof url !== 'string') return false;
@@ -597,111 +627,34 @@ function isValidLogoUrl(url) {
     return trimmed.startsWith('http://') || trimmed.startsWith('https://');
 }
 
-function renderChannelsGrid(reset) {
-    const grid = document.getElementById('channels-grid');
-    const countBadge = document.getElementById('channel-count-badge');
-    const emptyState = document.getElementById('empty-state');
-
-    if (countBadge) countBadge.textContent = filteredChannels.length + " canales";
-    if (!grid) return;
-
-    if (reset !== false) {
-        grid.innerHTML = '';
-        renderedGridCount = 0;
+// Generate distinct color palette for monogram fallback based on channel name
+function getMonogramGradient(name) {
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-
-    if (filteredChannels.length === 0) {
-        if (emptyState) emptyState.classList.remove('hidden');
-        return;
-    } else {
-        if (emptyState) emptyState.classList.add('hidden');
-    }
-
-    const fragment = document.createDocumentFragment();
-    const nextLimit = Math.min(filteredChannels.length, renderedGridCount + CHANNELS_CHUNK_SIZE);
-
-    for (let idx = renderedGridCount; idx < nextLimit; idx++) {
-        const ch = filteredChannels[idx];
-        const card = document.createElement('div');
-        card.className = "channel-card" + (idx === currentChannelIndex ? " focused" : "") + (activePlayingChannel && activePlayingChannel.url === ch.url ? " active-playing" : "");
-        card.dataset.index = idx;
-        card.tabIndex = 0;
-
-        let logoHtml = '';
-        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
-            logoHtml = '<img class="channel-logo-img" loading="lazy" src="' + escapeHtml(ch.logo) + '" alt="' + escapeHtml(ch.name) + '" onerror="handleLogoError(this, \'' + escapeHtml(ch.name) + '\')">';
-        } else {
-            logoHtml = createFallbackLogoHtml(ch.name);
-        }
-
-        card.innerHTML = 
-            '<div class="card-header-meta">' +
-                '<span class="channel-num-badge">#' + ch.number + '</span>' +
-                '<span class="channel-group-tag">' + escapeHtml(ch.group) + '</span>' +
-            '</div>' +
-            '<div class="channel-logo-wrap">' +
-                logoHtml +
-            '</div>' +
-            '<div class="channel-name" title="' + escapeHtml(ch.name) + '">' + escapeHtml(ch.name) + '</div>' +
-            '<div class="channel-footer-meta">' +
-                '<span class="live-indicator"><span class="pulse-dot"></span> EN VIVO</span>' +
-                '<span class="hd-badge">HD</span>' +
-            '</div>';
-
-        fragment.appendChild(card);
-    }
-
-    grid.appendChild(fragment);
-    renderedGridCount = nextLimit;
-}
-
-// Render Quick Drawer for In-Video Navigation (Chunked for maximum smoothness)
-function renderDrawerChannels(reset) {
-    const drawerList = document.getElementById('drawer-channels-list');
-    if (!drawerList) return;
-
-    if (reset !== false) {
-        drawerList.innerHTML = '';
-        renderedDrawerCount = 0;
-    }
-
-    const fragment = document.createDocumentFragment();
-    const nextLimit = Math.min(filteredChannels.length, renderedDrawerCount + DRAWER_CHUNK_SIZE);
-
-    for (let idx = renderedDrawerCount; idx < nextLimit; idx++) {
-        const ch = filteredChannels[idx];
-        const item = document.createElement('div');
-        item.className = "drawer-item" + (idx === currentChannelIndex ? " active focused" : "");
-        item.dataset.index = idx;
-
-        let logoEl = '';
-        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
-            logoEl = '<img class="drawer-item-logo" loading="lazy" src="' + escapeHtml(ch.logo) + '" alt="" onerror="handleLogoError(this, \'' + escapeHtml(ch.name) + '\')">';
-        } else {
-            const initials = (ch.name || 'TV').substring(0, 2).toUpperCase();
-            logoEl = '<div class="drawer-item-initials">' + escapeHtml(initials) + '</div>';
-        }
-
-        item.innerHTML = 
-            '<span class="drawer-item-num">#' + ch.number + '</span>' +
-            logoEl +
-            '<span class="drawer-item-name">' + escapeHtml(ch.name) + '</span>';
-
-        fragment.appendChild(item);
-    }
-
-    drawerList.appendChild(fragment);
-    renderedDrawerCount = nextLimit;
+    const gradients = [
+        'linear-gradient(135deg, #1e3a8a, #00e5ff)',
+        'linear-gradient(135deg, #4c1d95, #8b5cf6)',
+        'linear-gradient(135deg, #065f46, #10b981)',
+        'linear-gradient(135deg, #991b1b, #f59e0b)',
+        'linear-gradient(135deg, #1e293b, #3b82f6)',
+        'linear-gradient(135deg, #831843, #ec4899)'
+    ];
+    return gradients[Math.abs(hash) % gradients.length];
 }
 
 function createFallbackLogoHtml(name) {
     const initials = (name || 'TV')
+        .replace(/[^a-zA-Z0-9 ]/g, '')
         .split(' ')
+        .filter(Boolean)
         .slice(0, 2)
         .map(w => w[0])
         .join('')
-        .toUpperCase();
-    return '<div class="channel-fallback-logo"><span>' + escapeHtml(initials) + '</span></div>';
+        .toUpperCase() || 'TV';
+    const bg = getMonogramGradient(name);
+    return `<div class="channel-fallback-logo" style="background:${bg};"><span>${escapeHtml(initials)}</span></div>`;
 }
 
 window.handleLogoError = function (imgElement, channelName) {
@@ -716,39 +669,225 @@ window.handleLogoError = function (imgElement, channelName) {
     }
 };
 
+window.handleSpotlightLogoError = function (imgElement) {
+    if (!imgElement) return;
+    imgElement.onerror = null;
+    imgElement.style.display = 'none';
+    const fallback = document.getElementById('spotlight-fallback-logo');
+    if (fallback) fallback.classList.remove('hidden');
+};
+
+function renderChannelsGrid() {
+    const grid = document.getElementById('channels-grid');
+    const countBadge = document.getElementById('channel-count-badge');
+    const emptyState = document.getElementById('empty-state');
+
+    if (countBadge) countBadge.textContent = filteredChannels.length + " canales";
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    if (filteredChannels.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+    } else {
+        if (emptyState) emptyState.classList.add('hidden');
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    filteredChannels.forEach((ch, idx) => {
+        const card = document.createElement('div');
+        const isFocused = (idx === currentChannelIndex && currentNavZone === 'GRID');
+        const isPlaying = (activePlayingChannel && activePlayingChannel.url === ch.url);
+
+        card.className = "channel-card" + (isFocused ? " focused" : "") + (isPlaying ? " active-playing" : "");
+        card.dataset.index = idx;
+        card.tabIndex = 0;
+
+        let logoHtml = '';
+        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
+            logoHtml = `<img class="channel-logo-img" loading="lazy" src="${escapeHtml(ch.logo)}" alt="${escapeHtml(ch.name)}" onerror="handleLogoError(this, '${escapeHtml(ch.name)}')">`;
+        } else {
+            logoHtml = createFallbackLogoHtml(ch.name);
+        }
+
+        card.innerHTML = `
+            <div class="card-header-meta">
+                <span class="channel-num-badge">#${ch.number}</span>
+                <span class="channel-group-tag">${escapeHtml(ch.group)}</span>
+            </div>
+            <div class="channel-logo-wrap">
+                <div class="channel-logo-stage">
+                    ${logoHtml}
+                </div>
+            </div>
+            <div class="channel-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</div>
+            <div class="channel-footer-meta">
+                <span class="live-indicator"><span class="pulse-dot"></span> EN VIVO</span>
+                <span class="hd-badge">HD</span>
+            </div>
+        `;
+
+        card.addEventListener('mouseenter', () => {
+            currentNavZone = 'GRID';
+            currentChannelIndex = idx;
+            updateFocusedCard();
+            updateSpotlightBanner(ch);
+        });
+
+        card.addEventListener('click', () => {
+            selectAndPlayChannel(idx, true);
+        });
+
+        fragment.appendChild(card);
+    });
+
+    grid.appendChild(fragment);
+}
+
+// Update the dynamic Spotlight Hero Banner
+function updateSpotlightBanner(ch) {
+    if (!ch) return;
+
+    const spotlightLogo = document.getElementById('spotlight-logo');
+    const spotlightFallback = document.getElementById('spotlight-fallback-logo');
+    const spotlightNum = document.getElementById('spotlight-number');
+    const spotlightGroup = document.getElementById('spotlight-group');
+    const spotlightTitle = document.getElementById('spotlight-name');
+    const spotlightDesc = document.getElementById('spotlight-desc');
+
+    if (spotlightNum) spotlightNum.textContent = `#${ch.number}`;
+    if (spotlightGroup) spotlightGroup.textContent = ch.group || 'General';
+    if (spotlightTitle) spotlightTitle.textContent = ch.name;
+    if (spotlightDesc) spotlightDesc.textContent = `Señal en directo: ${ch.name} • Presiona [OK] para pantalla completa.`;
+
+    if (spotlightLogo && spotlightFallback) {
+        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
+            spotlightLogo.src = ch.logo;
+            spotlightLogo.style.display = 'block';
+            spotlightFallback.classList.add('hidden');
+        } else {
+            spotlightLogo.style.display = 'none';
+            spotlightFallback.classList.remove('hidden');
+            const initials = (ch.name || 'TV')
+                .replace(/[^a-zA-Z0-9 ]/g, '')
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map(w => w[0])
+                .join('')
+                .toUpperCase() || 'TV';
+            spotlightFallback.textContent = initials;
+            spotlightFallback.style.background = getMonogramGradient(ch.name);
+        }
+    }
+}
+
+function renderDrawerChannels() {
+    const drawerList = document.getElementById('drawer-channels-list');
+    const drawerCount = document.getElementById('drawer-count');
+    if (!drawerList) return;
+
+    if (drawerCount) drawerCount.textContent = filteredChannels.length + " canales";
+    drawerList.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+
+    filteredChannels.forEach((ch, idx) => {
+        const item = document.createElement('div');
+        const isActive = (idx === currentChannelIndex);
+        item.className = "drawer-item" + (isActive ? " active focused" : "");
+        item.dataset.index = idx;
+
+        let logoEl = '';
+        if (isValidLogoUrl(ch.logo) && !brokenLogos.has(ch.logo)) {
+            logoEl = `<img class="drawer-item-logo" loading="lazy" src="${escapeHtml(ch.logo)}" alt="" onerror="handleLogoError(this, '${escapeHtml(ch.name)}')">`;
+        } else {
+            const initials = (ch.name || 'TV').substring(0, 2).toUpperCase();
+            logoEl = `<div class="drawer-item-initials">${escapeHtml(initials)}</div>`;
+        }
+
+        item.innerHTML = `
+            <span class="drawer-item-num">#${ch.number}</span>
+            ${logoEl}
+            <span class="drawer-item-name">${escapeHtml(ch.name)}</span>
+        `;
+
+        item.addEventListener('click', () => {
+            selectAndPlayChannel(idx, true);
+            closeDrawer();
+        });
+
+        fragment.appendChild(item);
+    });
+
+    drawerList.appendChild(fragment);
+}
+
+function updateFocusedCard() {
+    const grid = document.getElementById('channels-grid');
+    if (!grid) return;
+
+    const oldCard = grid.querySelector('.channel-card.focused');
+    if (oldCard) oldCard.classList.remove('focused');
+
+    if (currentNavZone === 'GRID') {
+        const newCard = grid.querySelector('.channel-card[data-index="' + currentChannelIndex + '"]');
+        if (newCard) {
+            newCard.classList.add('focused');
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+// Calculate grid column count dynamically based on screen resolution
+function getGridColumns() {
+    const grid = document.getElementById('channels-grid');
+    if (!grid || filteredChannels.length === 0) return 5;
+    const cards = grid.children;
+    if (cards.length < 2) return 1;
+    const firstTop = cards[0].offsetTop;
+    let cols = 0;
+    for (let i = 0; i < cards.length; i++) {
+        if (cards[i].offsetTop === firstTop) {
+            cols++;
+        } else {
+            break;
+        }
+    }
+    return cols || 5;
+}
+
 // ==========================================================================
-// CHANNEL PLAYBACK & PERSISTENCE (O(1) Ultra-fast DOM updates)
+// CHANNEL PLAYBACK & HLS ENGINE (Optimized for Samsung TV)
 // ==========================================================================
-function selectAndPlayChannel(index, fullScreenMode) {
-    if (typeof fullScreenMode === 'undefined') fullScreenMode = true;
+function selectAndPlayChannel(index, fullScreenMode = true) {
     if (index < 0 || index >= filteredChannels.length) return;
 
     currentChannelIndex = index;
     const channel = filteredChannels[index];
     activePlayingChannel = channel;
+    streamRetryCount = 0;
 
-    // SAVE TO STORAGE: Resume exactly this channel next time app opens!
     localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, index);
     if (channel && channel.url) {
         localStorage.setItem(STORAGE_KEY_LAST_CHANNEL_URL, channel.url);
     }
 
-    // Instant O(1) state update on grid without querying all elements
-    const grid = document.getElementById('channels-grid');
-    if (grid) {
-        const oldCard = grid.querySelector('.channel-card.focused');
-        if (oldCard) oldCard.classList.remove('focused', 'active-playing');
-        const newCard = grid.querySelector('.channel-card[data-index="' + index + '"]');
-        if (newCard) newCard.classList.add('focused', 'active-playing');
-    }
+    updateFocusedCard();
+    updateSpotlightBanner(channel);
 
-    // Instant O(1) state update on drawer without querying all elements
+    // Update Drawer focused state
     const drawerList = document.getElementById('drawer-channels-list');
     if (drawerList) {
         const oldItem = drawerList.querySelector('.drawer-item.active');
         if (oldItem) oldItem.classList.remove('active', 'focused');
         const newItem = drawerList.querySelector('.drawer-item[data-index="' + index + '"]');
-        if (newItem) newItem.classList.add('active', 'focused');
+        if (newItem) {
+            newItem.classList.add('active', 'focused');
+            newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
 
     if (fullScreenMode) {
@@ -756,83 +895,147 @@ function selectAndPlayChannel(index, fullScreenMode) {
     }
 }
 
-// Low-memory, low-latency HLS configuration tuned for Samsung Smart TV hardware
 function playStream(videoEl, streamUrl) {
     if (!videoEl || !streamUrl) return;
 
     const loader = document.getElementById('player-buffering');
     const errorOverlay = document.getElementById('player-error');
+    const errorMsg = document.getElementById('player-error-msg');
 
     if (loader) loader.classList.remove('hidden');
     if (errorOverlay) errorOverlay.classList.add('hidden');
-
-    // Halt preview video to release hardware video decoder
-    const previewVideo = document.getElementById('preview-video');
-    if (previewVideo && previewVideo !== videoEl && !previewVideo.paused) {
-        try { previewVideo.pause(); previewVideo.src = ''; } catch(e) {}
-    }
 
     if (hlsMainInstance) {
         hlsMainInstance.destroy();
         hlsMainInstance = null;
     }
 
-    if (window.Hls && Hls.isSupported() && (streamUrl.indexOf('.m3u8') !== -1 || streamUrl.indexOf('.mp4') === -1)) {
-        const hls = new Hls({
-            enableWorker: false, // Prevents thread starvation on TV dual/quad-core processors
-            lowLatencyMode: false,
-            maxBufferLength: 8, // Buffer only 8 seconds ahead (low memory footprint)
-            maxMaxBufferLength: 12, // Maximum 12 seconds buffer
-            maxBufferSize: 8 * 1024 * 1024, // Strict 8MB memory ceiling for buffer
-            backBufferLength: 3, // Aggressively flush played memory
-            manifestLoadingTimeOut: 6000,
-            manifestLoadingMaxRetry: 2,
-            levelLoadingTimeOut: 6000,
-            fragLoadingTimeOut: 12000,
-            appendErrorMaxRetry: 2
-        });
+    videoEl.pause();
+    videoEl.removeAttribute('src');
+    videoEl.load();
 
-        hls.loadSource(streamUrl);
-        hls.attachMedia(videoEl);
+    console.log('[Player] Loading:', streamUrl.substring(0, 80));
 
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            videoEl.play().catch(function (e) { console.log("Play gesture wait:", e); });
-            if (loader) loader.classList.add('hidden');
-        });
-
-        hls.on(Hls.Events.ERROR, function (event, data) {
-            if (data.fatal) {
-                console.warn("HLS fatal error:", data.type);
-                switch (data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                        hls.startLoad();
-                        break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                        hls.recoverMediaError();
-                        break;
-                    default:
-                        hls.destroy();
-                        if (errorOverlay) errorOverlay.classList.remove('hidden');
-                        break;
-                }
-            }
-        });
-
-        hlsMainInstance = hls;
-
+    // Samsung Tizen has native HLS engine. Try native first on Tizen, fall back to HLS.js.
+    if (window.tizen) {
+        tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg);
+    } else if (window.Hls && Hls.isSupported()) {
+        _startHlsJs(videoEl, streamUrl, loader, errorOverlay, errorMsg);
     } else {
-        videoEl.src = streamUrl;
-        videoEl.play()
-            .then(function () { if (loader) loader.classList.add('hidden'); })
-            .catch(function (e) { console.warn("Video play error:", e); });
+        tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg);
     }
 
-    videoEl.onwaiting = function () { if (loader) loader.classList.remove('hidden'); };
-    videoEl.onplaying = function () { if (loader) loader.classList.add('hidden'); };
-    videoEl.onerror = function () {
+    videoEl.onwaiting = () => { if (loader) loader.classList.remove('hidden'); };
+    videoEl.onplaying = () => {
         if (loader) loader.classList.add('hidden');
-        if (errorOverlay) errorOverlay.classList.remove('hidden');
+        if (errorOverlay) errorOverlay.classList.add('hidden');
+        streamRetryCount = 0;
     };
+}
+
+function _startHlsJs(videoEl, streamUrl, loader, errorOverlay, errorMsg) {
+    const hls = new Hls({
+        enableWorker: false,
+        lowLatencyMode: false,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 20 * 1024 * 1024,
+        backBufferLength: 8,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 20000,
+        appendErrorMaxRetry: 4
+    });
+
+    hls.loadSource(streamUrl);
+    hls.attachMedia(videoEl);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        videoEl.play().catch(e => console.log('Gesture wait:', e));
+        if (loader) loader.classList.add('hidden');
+    });
+
+    hls.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) {
+            console.warn('[HLS.js] Fatal:', data.type, data.details);
+            switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                    if (streamRetryCount < MAX_STREAM_RETRIES) {
+                        streamRetryCount++;
+                        setTimeout(() => hls.startLoad(), 2000);
+                    } else {
+                        hls.destroy();
+                        hlsMainInstance = null;
+                        tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg);
+                    }
+                    break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                    if (streamRetryCount < MAX_STREAM_RETRIES) {
+                        streamRetryCount++;
+                        hls.recoverMediaError();
+                    } else {
+                        hls.destroy();
+                        hlsMainInstance = null;
+                        tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg);
+                    }
+                    break;
+                default:
+                    hls.destroy();
+                    hlsMainInstance = null;
+                    tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg);
+                    break;
+            }
+        }
+    });
+
+    hlsMainInstance = hls;
+}
+
+function tryNativePlayback(videoEl, streamUrl, loader, errorOverlay, errorMsg) {
+    videoEl.src = streamUrl;
+
+    const pp = videoEl.play();
+    if (pp !== undefined) {
+        pp.then(() => {
+            if (loader) loader.classList.add('hidden');
+            if (errorOverlay) errorOverlay.classList.add('hidden');
+        }).catch(e => {
+            if (e.name !== 'NotAllowedError') {
+                _showStreamError(loader, errorOverlay, errorMsg, streamUrl, e.message);
+            }
+        });
+    }
+
+    const errHandler = () => {
+        videoEl.removeEventListener('error', errHandler);
+        const code = videoEl.error ? videoEl.error.code : '?';
+        if (window.tizen && window.Hls && Hls.isSupported() && streamRetryCount < 1) {
+            streamRetryCount++;
+            _startHlsJs(videoEl, streamUrl, loader, errorOverlay, errorMsg);
+        } else {
+            _showStreamError(loader, errorOverlay, errorMsg, streamUrl, 'Error de video (código: ' + code + ')');
+        }
+    };
+    videoEl.addEventListener('error', errHandler, { once: true });
+}
+
+function _showStreamError(loader, errorOverlay, errorMsg, streamUrl, detail) {
+    if (loader) loader.classList.add('hidden');
+    if (errorOverlay) errorOverlay.classList.remove('hidden');
+
+    const isHttp = streamUrl && streamUrl.startsWith('http://');
+    let reason = detail || 'La señal no responde o el enlace M3U8 ha expirado.';
+
+    if (isHttp && typeof window !== 'undefined' && window.location.protocol === 'https:') {
+        reason = 'Stream HTTP bloqueado por HTTPS. Funciona directamente en la Smart TV.';
+    } else if (detail && detail.includes('403')) {
+        reason = 'Acceso bloqueado por el proveedor (Error 403).';
+    } else if (detail && detail.includes('404')) {
+        reason = 'Stream no encontrado (Error 404). El enlace puede haber caducado.';
+    }
+
+    if (errorMsg) errorMsg.textContent = reason;
 }
 
 // ==========================================================================
@@ -847,7 +1050,6 @@ function openFullscreen() {
     const appContainer = document.getElementById('app-container');
 
     if (overlay) overlay.classList.remove('hidden');
-    // Hide background layout so TV GPU doesn't waste CPU/RAM rendering behind the video
     if (appContainer) appContainer.style.display = 'none';
 
     playStream(mainVideo, activePlayingChannel.url);
@@ -859,9 +1061,25 @@ function closeFullscreen() {
     isFullscreen = false;
     const overlay = document.getElementById('player-overlay');
     const appContainer = document.getElementById('app-container');
+    const mainVideo = document.getElementById('main-video');
 
     if (overlay) overlay.classList.add('hidden');
     if (appContainer) appContainer.style.display = 'flex';
+    if (mainVideo) {
+        mainVideo.pause();
+        mainVideo.removeAttribute('src');
+        mainVideo.load();
+        mainVideo.onwaiting = null;
+        mainVideo.onplaying = null;
+        mainVideo.onerror = null;
+    }
+    if (hlsMainInstance) {
+        hlsMainInstance.destroy();
+        hlsMainInstance = null;
+    }
+    streamRetryCount = 0;
+    closeDrawer();
+    updateFocusedCard();
 }
 
 function updateOSD(ch) {
@@ -895,7 +1113,8 @@ function showOSD() {
     }, 3500);
 }
 
-// Debounced channel switching with INSTANT 0ms visual OSD feedback!
+let channelSwitchDebounceTimer = null;
+
 function switchChannelRelative(offset) {
     if (filteredChannels.length === 0) return;
 
@@ -907,18 +1126,16 @@ function switchChannelRelative(offset) {
     const ch = filteredChannels[newIndex];
     activePlayingChannel = ch;
 
-    // 1. Instant OSD feedback (0ms latency!)
     updateOSD(ch);
     showOSD();
 
-    // 2. Debounce the heavy video player reloading by 180ms
     clearTimeout(channelSwitchDebounceTimer);
-    channelSwitchDebounceTimer = setTimeout(function () {
+    channelSwitchDebounceTimer = setTimeout(() => {
         selectAndPlayChannel(currentChannelIndex, true);
     }, 180);
 }
 
-// Drawer: Quick Channel List over video
+// Quick Channel Drawer
 function toggleDrawer() {
     isDrawerOpen ? closeDrawer() : openDrawer();
 }
@@ -929,15 +1146,6 @@ function openDrawer() {
     drawer.classList.remove('hidden');
     isDrawerOpen = true;
     drawerFocusedIndex = currentChannelIndex;
-
-    // Render drawer if empty or ensure focused channel is loaded
-    if (renderedDrawerCount === 0 || drawerFocusedIndex >= renderedDrawerCount) {
-        renderDrawerChannels(true);
-        while (drawerFocusedIndex >= renderedDrawerCount && renderedDrawerCount < filteredChannels.length) {
-            renderDrawerChannels(false);
-        }
-    }
-
     scrollDrawerToItem(drawerFocusedIndex);
 }
 
@@ -959,11 +1167,6 @@ function navigateDrawer(direction) {
     if (drawerFocusedIndex < 0) drawerFocusedIndex = filteredChannels.length - 1;
     if (drawerFocusedIndex >= filteredChannels.length) drawerFocusedIndex = 0;
 
-    // Dynamically load more items if navigating near the bottom
-    if (drawerFocusedIndex >= renderedDrawerCount - 5 && renderedDrawerCount < filteredChannels.length) {
-        renderDrawerChannels(false);
-    }
-
     const newItem = drawerList.querySelector('.drawer-item[data-index="' + drawerFocusedIndex + '"]');
     if (newItem) {
         newItem.classList.add('focused');
@@ -982,9 +1185,148 @@ function scrollDrawerToItem(index) {
 }
 
 // ==========================================================================
-// HIDDEN ADMIN MODAL (NO VISIBLE BUTTON) & LOCAL FILE UPLOAD
+// TV QR CODE PAIRING SCREEN (ONLY QR - NO REMOTE TEXT INPUTS)
 // ==========================================================================
-function openHiddenAdminModal() {
+function isTvLoginActive() {
+    const overlay = document.getElementById('tv-login-overlay');
+    return overlay && !overlay.classList.contains('hidden');
+}
+
+function showTvLoginScreen() {
+    const overlay = document.getElementById('tv-login-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+
+    // Close player if open
+    if (isFullscreen) closeFullscreen();
+
+    startQrPairingWorkflow();
+}
+
+function hideTvLoginScreen() {
+    stopQrPairingWorkflow();
+    const overlay = document.getElementById('tv-login-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function stopQrPairingWorkflow() {
+    if (pairPollInterval) {
+        clearInterval(pairPollInterval);
+        pairPollInterval = null;
+    }
+}
+
+function startQrPairingWorkflow() {
+    stopQrPairingWorkflow();
+
+    const qrBox = document.getElementById('tv-qr-box');
+    const pairCodeEl = document.getElementById('tv-pair-code');
+    const statusEl = document.getElementById('tv-pair-status');
+
+    if (pairCodeEl) pairCodeEl.textContent = "------";
+    if (statusEl) statusEl.textContent = "Generando código seguro...";
+    if (qrBox) {
+        qrBox.innerHTML = '<div class="qr-loading">Generando código seguro...</div>';
+    }
+
+    const serverUrl = getServerUrl();
+
+    fetch(serverUrl + '/api/auth/pair/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!isTvLoginActive()) return;
+
+        if (data && data.success && data.pairCode) {
+            const pairCode = data.pairCode;
+            if (pairCodeEl) pairCodeEl.textContent = pairCode;
+            if (statusEl) statusEl.textContent = "Esperando que confirmes en tu teléfono móvil...";
+
+            // Direct link to GitHub Pages pair.html with code and server fallback
+            const mobilePairUrl = `${GITHUB_PAGES_PAIR_URL}?code=${encodeURIComponent(pairCode)}&server=${encodeURIComponent(serverUrl)}`;
+
+            const urlTextEl = document.getElementById('tv-pair-url-text');
+            if (urlTextEl) urlTextEl.textContent = `${GITHUB_PAGES_PAIR_URL}?code=${pairCode}`;
+
+            if (qrBox) {
+                qrBox.innerHTML = '';
+                try {
+                    if (typeof QRCode !== 'undefined') {
+                        new QRCode(qrBox, {
+                            text: mobilePairUrl,
+                            width: 190,
+                            height: 190,
+                            colorDark: "#050811",
+                            colorLight: "#ffffff",
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    } else {
+                        qrBox.innerHTML = `<div style="font-size:12px;color:#0284c7;padding:10px;text-align:center;">Abre en tu móvil:<br><strong>${mobilePairUrl}</strong></div>`;
+                    }
+                } catch (e) {
+                    console.warn("QR render error:", e);
+                    qrBox.innerHTML = `<div style="font-size:12px;color:#0284c7;padding:10px;text-align:center;">Abre en tu móvil:<br><strong>${mobilePairUrl}</strong></div>`;
+                }
+            }
+
+            // Start polling every 2 seconds
+            pairPollInterval = setInterval(() => {
+                checkPairStatus(pairCode);
+            }, 2000);
+
+        } else {
+            if (qrBox) qrBox.innerHTML = '<div style="color:#ef4444;font-size:12px;padding:10px;">Error al conectar con servidor.<br>Revisa tu conexión.</div>';
+            if (statusEl) statusEl.textContent = "Fallo de conexión al servicio.";
+        }
+    })
+    .catch(err => {
+        console.warn("Pair request error:", err);
+        if (qrBox) qrBox.innerHTML = '<div style="color:#ef4444;font-size:12px;padding:10px;">Sin conexión al servidor.<br>Usa canales demo.</div>';
+        if (statusEl) statusEl.textContent = "Sin conexión al servidor en la nube.";
+    });
+}
+
+function checkPairStatus(pairCode) {
+    if (!isTvLoginActive()) {
+        stopQrPairingWorkflow();
+        return;
+    }
+
+    const serverUrl = getServerUrl();
+    fetch(serverUrl + '/api/auth/pair/status?code=' + encodeURIComponent(pairCode))
+    .then(res => res.json())
+    .then(data => {
+        if (data && data.status === 'approved' && data.token) {
+            stopQrPairingWorkflow();
+            localStorage.setItem(STORAGE_KEY_TOKEN, data.token);
+            localStorage.setItem(STORAGE_KEY_USERNAME, data.username || 'Usuario');
+            hideTvLoginScreen();
+            updateUserSessionUI();
+            showToast(`¡Bienvenido @${data.username || 'Usuario'}! Dispositivo vinculado`);
+            fetchChannelsFromBackend(true);
+        } else if (data && data.status === 'expired') {
+            stopQrPairingWorkflow();
+            startQrPairingWorkflow();
+        }
+    })
+    .catch(() => {});
+}
+
+function handleTvLogout() {
+    stopQrPairingWorkflow();
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_USERNAME);
+    closeAdminModal();
+    updateUserSessionUI();
+    showTvLoginScreen();
+    showToast("Sesión cerrada. Escanea para vincular otra cuenta.");
+}
+
+// ==========================================================================
+// SETTINGS / ADMIN MODAL (PIN PROTECTED)
+// ==========================================================================
+function openAdminModal() {
     const modal = document.getElementById('admin-modal');
     const pinView = document.getElementById('admin-pin-view');
     const panelView = document.getElementById('admin-panel-view');
@@ -1027,11 +1369,6 @@ function verifyAdminPin() {
             urlInput.value = localStorage.getItem(STORAGE_KEY_URL) || '';
             urlInput.focus();
         }
-
-        const serverInput = document.getElementById('server-url-input');
-        if (serverInput) {
-            serverInput.value = getServerUrl();
-        }
     } else {
         if (pinError) pinError.classList.remove('hidden');
         pinInput.value = '';
@@ -1045,17 +1382,15 @@ function saveCustomM3UUrl() {
 
     const newUrl = urlInput.value.trim();
     if (!newUrl) {
-        showToast("Por favor ingresa un link M3U válido");
+        showToast("Ingresa un link M3U / M3U8 válido");
         return;
     }
 
-    localStorage.setItem(STORAGE_KEY_URL, newUrl);
     closeAdminModal();
-    showToast("Descargando nueva lista M3U...");
-    loadPlaylist();
+    loadCustomM3UUrl(newUrl);
 }
 
-// Local File Upload Handler (.m3u / .m3u8)
+// Local File Upload Handler
 let pendingFileContent = null;
 
 function handleLocalFileSelect(event) {
@@ -1082,31 +1417,20 @@ function handleLocalFileSelect(event) {
 function processAndSaveLocalFile() {
     if (!pendingFileContent) return;
 
-    const parsed = parseM3U(pendingFileContent);
+    const parsed = parseM3U(pendingFileContent, '', 'Archivo Local');
     if (parsed.length === 0) {
-        showToast("El archivo no contiene canales válidos en formato M3U");
+        showToast("El archivo no contiene canales válidos en formato M3U o M3U8");
         return;
     }
 
     allChannels = parsed;
-    localStorage.removeItem(STORAGE_KEY_URL); // Clear remote url so it uses local file
+    localStorage.removeItem(STORAGE_KEY_URL);
     localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(allChannels));
     localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, 0);
 
     closeAdminModal();
     finishPlaylistLoad("Archivo local subido");
     showToast(`¡Éxito! ${allChannels.length} canales cargados.`);
-}
-
-function clearCustomM3U() {
-    if (confirm("¿Seguro que deseas borrar la lista configurada y volver a la demo?")) {
-        localStorage.removeItem(STORAGE_KEY_URL);
-        localStorage.removeItem(STORAGE_KEY_CHANNELS);
-        localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, 0);
-        closeAdminModal();
-        useDemoPlaylist();
-        showToast("Lista restablecida a los canales de fábrica");
-    }
 }
 
 // ==========================================================================
@@ -1127,10 +1451,56 @@ function showToast(msg) {
 }
 
 // ==========================================================================
-// SAMSUNG SMART REMOTE (BN59) MAPPING & KEYBOARD HANDLERS
+// REMOTE CONTROL & D-PAD NAVIGATION ENGINE (100% BUG-FREE 2D GRID)
 // ==========================================================================
 function initEventListeners() {
-    // Admin modal tabs (Remote URL vs Local File)
+    // Header buttons
+    const settingsBtn = document.getElementById('btn-open-settings');
+    if (settingsBtn) settingsBtn.addEventListener('click', openAdminModal);
+
+    const accountBtn = document.getElementById('btn-user-account');
+    if (accountBtn) accountBtn.addEventListener('click', showTvLoginScreen);
+
+    // Spotlight Play button
+    const spotlightPlayBtn = document.getElementById('btn-spotlight-play');
+    if (spotlightPlayBtn) {
+        spotlightPlayBtn.addEventListener('click', () => {
+            selectAndPlayChannel(currentChannelIndex, true);
+        });
+    }
+
+    // Empty state buttons
+    const emptyDemoBtn = document.getElementById('btn-empty-demo');
+    if (emptyDemoBtn) emptyDemoBtn.addEventListener('click', useDemoPlaylist);
+
+    const emptyQrBtn = document.getElementById('btn-empty-qr');
+    if (emptyQrBtn) emptyQrBtn.addEventListener('click', showTvLoginScreen);
+
+    const emptySettingsBtn = document.getElementById('btn-empty-settings');
+    if (emptySettingsBtn) emptySettingsBtn.addEventListener('click', openAdminModal);
+
+    // QR Overlay buttons
+    const qrRefreshBtn = document.getElementById('btn-qr-refresh');
+    if (qrRefreshBtn) qrRefreshBtn.addEventListener('click', startQrPairingWorkflow);
+
+    const qrSkipBtn = document.getElementById('btn-qr-skip');
+    if (qrSkipBtn) {
+        qrSkipBtn.addEventListener('click', () => {
+            hideTvLoginScreen();
+            loadDefaultPlaylist();
+            showToast("Modo libre activado");
+        });
+    }
+
+    const qrSettingsBtn = document.getElementById('btn-qr-settings');
+    if (qrSettingsBtn) {
+        qrSettingsBtn.addEventListener('click', () => {
+            hideTvLoginScreen();
+            openAdminModal();
+        });
+    }
+
+    // Admin modal tabs (URL vs File)
     const tabBtnUrl = document.getElementById('tab-btn-url');
     const tabBtnFile = document.getElementById('tab-btn-file');
     const tabUrl = document.getElementById('admin-tab-url');
@@ -1152,7 +1522,7 @@ function initEventListeners() {
         });
     }
 
-    // Local file trigger & process
+    // File input triggers
     const fileInput = document.getElementById('m3u-file-input');
     const triggerFileBtn = document.getElementById('btn-trigger-file');
     const loadFileBtn = document.getElementById('btn-load-file');
@@ -1166,7 +1536,7 @@ function initEventListeners() {
         loadFileBtn.addEventListener('click', processAndSaveLocalFile);
     }
 
-    // Admin PIN & Save buttons
+    // Modal buttons
     const closeBtn = document.getElementById('btn-close-modal');
     if (closeBtn) closeBtn.addEventListener('click', closeAdminModal);
 
@@ -1182,12 +1552,28 @@ function initEventListeners() {
             localStorage.removeItem(STORAGE_KEY_URL);
             localStorage.removeItem(STORAGE_KEY_CHANNELS);
             closeAdminModal();
-            useDemoPlaylist();
+            loadDefaultPlaylist();
         });
     }
 
-    const clearM3uBtn = document.getElementById('btn-clear-m3u');
-    if (clearM3uBtn) clearM3uBtn.addEventListener('click', clearCustomM3U);
+    const syncCloudBtn = document.getElementById('btn-sync-cloud');
+    if (syncCloudBtn) {
+        syncCloudBtn.addEventListener('click', () => {
+            closeAdminModal();
+            fetchChannelsFromBackend(true);
+        });
+    }
+
+    const openQrFromModalBtn = document.getElementById('btn-open-qr-from-modal');
+    if (openQrFromModalBtn) {
+        openQrFromModalBtn.addEventListener('click', () => {
+            closeAdminModal();
+            showTvLoginScreen();
+        });
+    }
+
+    const logoutBtn = document.getElementById('btn-tv-logout');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleTvLogout);
 
     // Search input
     const searchInput = document.getElementById('channel-search');
@@ -1195,80 +1581,21 @@ function initEventListeners() {
         searchInput.addEventListener('input', () => filterChannels());
     }
 
-    // TV Login submit button
-    const tvLoginBtn = document.getElementById('btn-tv-login-submit');
-    if (tvLoginBtn) {
-        tvLoginBtn.addEventListener('click', handleTvLogin);
-    }
-
-    // Cloud sync button
-    const syncCloudBtn = document.getElementById('btn-sync-cloud');
-    if (syncCloudBtn) {
-        syncCloudBtn.addEventListener('click', function() {
-            closeAdminModal();
-            fetchChannelsFromBackend(true);
-        });
-    }
-
-    // TV Logout button
-    const tvLogoutBtn = document.getElementById('btn-tv-logout');
-    if (tvLogoutBtn) {
-        tvLogoutBtn.addEventListener('click', function() {
-            if (confirm("¿Deseas cerrar sesión en esta TV?")) {
-                handleTvLogout();
-            }
-        });
-    }
-
-    // Server URL input changes
-    const serverInput = document.getElementById('server-url-input');
-    if (serverInput) {
-        serverInput.addEventListener('change', function() {
-            const val = serverInput.value.trim();
-            if (val) {
-                localStorage.setItem(STORAGE_KEY_SERVER, val);
-                showToast("Servidor actualizado: " + val);
-            }
-        });
-    }
-
-    // Delegated click for Channels Grid (ultra-fast, zero per-card listeners)
-    const grid = document.getElementById('channels-grid');
-    if (grid) {
-        grid.addEventListener('click', function (e) {
-            const card = e.target.closest('.channel-card');
-            if (card && card.dataset.index) {
-                selectAndPlayChannel(parseInt(card.dataset.index, 10), true);
-            }
-        });
-        grid.addEventListener('scroll', function () {
-            if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) {
-                if (renderedGridCount < filteredChannels.length) {
-                    renderChannelsGrid(false);
-                }
-            }
-        });
-    }
-
-    // Delegated click for Quick Drawer
-    const drawerList = document.getElementById('drawer-channels-list');
-    if (drawerList) {
-        drawerList.addEventListener('click', function (e) {
-            const item = e.target.closest('.drawer-item');
-            if (item && item.dataset.index) {
-                selectAndPlayChannel(parseInt(item.dataset.index, 10), true);
-                closeDrawer();
-            }
-        });
-    }
-
-    // Close player button (return to grid)
+    // Player buttons
     const closePlayerBtn = document.getElementById('btn-close-player');
-    if (closePlayerBtn) {
-        closePlayerBtn.addEventListener('click', closeFullscreen);
+    if (closePlayerBtn) closePlayerBtn.addEventListener('click', closeFullscreen);
+
+    const retryStreamBtn = document.getElementById('btn-retry-stream');
+    if (retryStreamBtn) {
+        retryStreamBtn.addEventListener('click', () => {
+            if (activePlayingChannel) {
+                const mainVideo = document.getElementById('main-video');
+                playStream(mainVideo, activePlayingChannel.url);
+            }
+        });
     }
 
-    // Global Keydown & Keyup (Long Press OK support)
+    // Global Keydown & Keyup (Samsung Smart Remote D-Pad & Keys)
     window.addEventListener('keydown', handleGlobalKeyDown);
     window.addEventListener('keyup', handleGlobalKeyUp);
 }
@@ -1276,56 +1603,28 @@ function initEventListeners() {
 function handleGlobalKeyDown(e) {
     const keyCode = e.keyCode || e.which;
 
-    // Detect Long Press on OK / Enter (3 seconds) to open Admin Menu
+    // Detect Long Press on OK / Enter (2.5 seconds) to open Admin Menu
     if (keyCode === 13 && !okKeyTimer) {
         isLongPress = false;
         okKeyTimer = setTimeout(() => {
             isLongPress = true;
-            openHiddenAdminModal();
+            openAdminModal();
         }, 2500);
     }
 
-    // If TV Login Screen is active:
+    // If TV QR Login Screen is open:
     if (isTvLoginActive()) {
-        const usernameInput = document.getElementById('tv-input-username');
-        const passwordInput = document.getElementById('tv-input-password');
-        const submitBtn = document.getElementById('btn-tv-login-submit');
-
         switch (keyCode) {
-            case 38: // Arrow Up
-                if (document.activeElement === submitBtn) {
-                    if (passwordInput) passwordInput.focus();
-                } else if (document.activeElement === passwordInput) {
-                    if (usernameInput) usernameInput.focus();
-                }
+            case 13: // Enter / OK -> Refresh QR code
+                startQrPairingWorkflow();
                 return;
-
-            case 40: // Arrow Down
-                if (document.activeElement === usernameInput) {
-                    if (passwordInput) passwordInput.focus();
-                } else if (document.activeElement === passwordInput) {
-                    if (submitBtn) submitBtn.focus();
-                }
-                return;
-
-            case 13: // Enter / OK
-                if (document.activeElement === usernameInput) {
-                    if (passwordInput) passwordInput.focus();
-                } else {
-                    handleTvLogin();
-                }
-                return;
-
-            case 10009: // Return / Exit
+            case 10009: // Return / Exit -> Skip to free mode
             case 27:
-                if (confirm("¿Deseas salir de la aplicación?")) {
-                    if (window.tizen && tizen.application) {
-                        tizen.application.getCurrentApplication().exit();
-                    }
-                }
+                hideTvLoginScreen();
+                loadDefaultPlaylist();
                 return;
         }
-        return; // Block other media/channel keys while login is active
+        return;
     }
 
     // If Admin Modal is open:
@@ -1338,7 +1637,7 @@ function handleGlobalKeyDown(e) {
             } else {
                 saveCustomM3UUrl();
             }
-        } else if (keyCode === 10009 || keyCode === 27) { // Return / Escape
+        } else if (keyCode === 10009 || keyCode === 27) {
             closeAdminModal();
         }
         return;
@@ -1346,7 +1645,7 @@ function handleGlobalKeyDown(e) {
 
     // Direct Remote Control Key Mapping for Samsung SolarCell / Smart Remote
     switch (keyCode) {
-        // Balancín CH (Channel Rocker)
+        // Channel Rocker (CH Up / Down)
         case 427: // ChannelUp
             switchChannelRelative(1);
             return;
@@ -1354,61 +1653,72 @@ function handleGlobalKeyDown(e) {
             switchChannelRelative(-1);
             return;
 
-        // Botón Menú (☰) o Botón Rojo (123 -> Rojo) -> Abre panel Admin
+        // Menu Key or Red Button (123 -> Red) -> Open Admin Settings
         case 10133: // Menu Key
         case 18:    // Alt / Menu
         case 403:   // ColorF0Red (Botón Rojo)
-            openHiddenAdminModal();
+            openAdminModal();
             return;
 
-        // Botón Play / Pause (⏯)
+        // Play / Pause (⏯)
         case 10252: // MediaPlayPause
         case 415:   // MediaPlay
         case 19:    // MediaPause
             togglePlayPause();
             return;
 
-        // Flecha ARRIBA
+        // Arrow UP
         case 38:
             if (isDrawerOpen) {
                 navigateDrawer(-1);
             } else if (isFullscreen) {
                 switchChannelRelative(-1);
             } else {
-                navigateGridRelative(-1);
+                navigate2D(0, -1);
             }
             return;
 
-        // Flecha ABAJO
+        // Arrow DOWN
         case 40:
             if (isDrawerOpen) {
                 navigateDrawer(1);
             } else if (isFullscreen) {
                 switchChannelRelative(1);
             } else {
-                navigateGridRelative(1);
+                navigate2D(0, 1);
             }
             return;
 
-        // Flecha DERECHA / IZQUIERDA
-        case 39: // Right
-        case 37: // Left
+        // Arrow RIGHT
+        case 39:
             if (isFullscreen) {
                 toggleDrawer();
+            } else {
+                navigate2D(1, 0);
             }
             return;
 
-        // Botón ATRÁS / RETURN (↩)
+        // Arrow LEFT
+        case 37:
+            if (isFullscreen) {
+                toggleDrawer();
+            } else {
+                navigate2D(-1, 0);
+            }
+            return;
+
+        // RETURN / BACK Key
         case 10009: // Tizen Return
-        case 27:    // Escape (PC)
-        case 8:     // Backspace (PC)
+        case 27:    // Escape
+        case 8:     // Backspace
             if (isDrawerOpen) {
                 closeDrawer();
             } else if (isFullscreen) {
                 closeFullscreen();
-                showToast("Pulsa ATRÁS para salir");
+            } else if (currentNavZone === 'CATEGORIES') {
+                currentNavZone = 'GRID';
+                updateFocusedCard();
             } else {
-                // Confirm exit
                 if (confirm("¿Deseas salir de la aplicación?")) {
                     if (window.tizen && tizen.application) {
                         tizen.application.getCurrentApplication().exit();
@@ -1419,27 +1729,111 @@ function handleGlobalKeyDown(e) {
     }
 }
 
-function navigateGridRelative(offset) {
-    if (filteredChannels.length === 0) return;
-    let nextIndex = currentChannelIndex + offset;
-    if (nextIndex < 0) nextIndex = 0;
-    if (nextIndex >= filteredChannels.length) nextIndex = filteredChannels.length - 1;
+// 2D D-PAD NAVIGATION ENGINE (Seamless Grid & Category Switch)
+function navigate2D(dx, dy) {
+    const cols = getGridColumns();
 
-    // Load next batch when scrolling near bottom
-    if (nextIndex >= renderedGridCount - 6 && renderedGridCount < filteredChannels.length) {
-        renderChannelsGrid(false);
+    if (currentNavZone === 'GRID') {
+        if (filteredChannels.length === 0) {
+            if (dy < 0) {
+                focusCategoriesBar();
+            }
+            return;
+        }
+
+        if (dy < 0) {
+            // Arrow UP
+            const targetIndex = currentChannelIndex - cols;
+            if (targetIndex < 0) {
+                // At row 0 -> move up to Category Bar!
+                focusCategoriesBar();
+                return;
+            } else {
+                currentChannelIndex = targetIndex;
+            }
+        } else if (dy > 0) {
+            // Arrow DOWN
+            const targetIndex = currentChannelIndex + cols;
+            if (targetIndex < filteredChannels.length) {
+                currentChannelIndex = targetIndex;
+            } else {
+                // If last row has fewer columns, clamp to last channel
+                currentChannelIndex = filteredChannels.length - 1;
+            }
+        }
+
+        if (dx < 0) {
+            // Arrow LEFT
+            if (currentChannelIndex > 0) {
+                currentChannelIndex--;
+            }
+        } else if (dx > 0) {
+            // Arrow RIGHT
+            if (currentChannelIndex < filteredChannels.length - 1) {
+                currentChannelIndex++;
+            }
+        }
+
+        updateFocusedCard();
+        if (filteredChannels[currentChannelIndex]) {
+            updateSpotlightBanner(filteredChannels[currentChannelIndex]);
+        }
+
+    } else if (currentNavZone === 'CATEGORIES') {
+        const catChips = document.querySelectorAll('.category-chip');
+        if (catChips.length === 0) return;
+
+        if (dy > 0) {
+            // Arrow DOWN -> Enter channel grid!
+            currentNavZone = 'GRID';
+            catChips.forEach(c => c.classList.remove('focused'));
+            currentChannelIndex = 0;
+            updateFocusedCard();
+            if (filteredChannels[0]) updateSpotlightBanner(filteredChannels[0]);
+            return;
+        }
+
+        if (dx < 0) {
+            // Arrow LEFT in categories
+            categoryNavIndex = Math.max(0, categoryNavIndex - 1);
+        } else if (dx > 0) {
+            // Arrow RIGHT in categories
+            categoryNavIndex = Math.min(catChips.length - 1, categoryNavIndex + 1);
+        }
+
+        catChips.forEach((c, idx) => {
+            c.classList.toggle('focused', idx === categoryNavIndex);
+        });
+
+        const activeChip = catChips[categoryNavIndex];
+        if (activeChip) {
+            activeChip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            const cat = activeChip.dataset.category;
+            if (cat && cat !== selectedCategory) {
+                setCategory(cat);
+            }
+        }
     }
+}
 
-    currentChannelIndex = nextIndex;
+function focusCategoriesBar() {
+    currentNavZone = 'CATEGORIES';
     const grid = document.getElementById('channels-grid');
     if (grid) {
         const oldCard = grid.querySelector('.channel-card.focused');
         if (oldCard) oldCard.classList.remove('focused');
-        const newCard = grid.querySelector('.channel-card[data-index="' + nextIndex + '"]');
-        if (newCard) {
-            newCard.classList.add('focused');
-            newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+    }
+
+    const catChips = document.querySelectorAll('.category-chip');
+    categoryNavIndex = categories.indexOf(selectedCategory);
+    if (categoryNavIndex < 0) categoryNavIndex = 0;
+
+    catChips.forEach((c, idx) => {
+        c.classList.toggle('focused', idx === categoryNavIndex);
+    });
+
+    if (catChips[categoryNavIndex]) {
+        catChips[categoryNavIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }
 }
 
@@ -1450,10 +1844,8 @@ function handleGlobalKeyUp(e) {
         clearTimeout(okKeyTimer);
         okKeyTimer = null;
 
-        // If TV Login is active, don't trigger drawer or channel play
         if (isTvLoginActive()) return;
 
-        // If it was not a long press:
         if (!isLongPress) {
             const modal = document.getElementById('admin-modal');
             if (modal && !modal.classList.contains('hidden')) return;
@@ -1462,10 +1854,13 @@ function handleGlobalKeyUp(e) {
                 selectAndPlayChannel(drawerFocusedIndex, true);
                 closeDrawer();
             } else if (isFullscreen) {
-                // Toggle Channel Quick Drawer on OK press
                 toggleDrawer();
+            } else if (currentNavZone === 'CATEGORIES') {
+                currentNavZone = 'GRID';
+                document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('focused'));
+                currentChannelIndex = 0;
+                updateFocusedCard();
             } else {
-                // Play focused card in fullscreen
                 selectAndPlayChannel(currentChannelIndex, true);
             }
         }

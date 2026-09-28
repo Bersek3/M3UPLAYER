@@ -31,6 +31,8 @@ files:
   - icon.png
   - index.html
   - main.js
+  - hls.min.js
+  - qrcode.min.js
 
 # list of files to exclude based on the matched patterns
 excludes:

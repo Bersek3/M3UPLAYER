@@ -4,7 +4,7 @@
    <description>Reproductor IPTV M3U Moderno para Samsung Smart TV</description>
    <icon src="icon.png"/>
    <content src="index.html"/>
-   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+   <feature name="http://tizen.org/feature/screen.size.all"/>
    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
    <tizen:application id="vhdFxeE16x.M3UPLAYER" package="vhdFxeE16x" required_version="2.3"/>
    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>

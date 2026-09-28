@@ -26,14 +26,17 @@ Aplicación profesional de reproducción IPTV / M3U para **Samsung Smart TV (Tiz
 
 ## 📲 Cómo Usar
 
-1. **Registro / Subida de Listas**:
-   - Abre tu enlace de Render en cualquier navegador (PC o celular).
-   - Crea tu cuenta de usuario.
-   - Sube tu lista M3U (archivo local o enlace web).
-2. **Acceso en la TV**:
-   - Al abrir la aplicación en tu televisor Samsung, verás la pantalla de inicio.
-   - **Opción 1 (Recomendada)**: Escanea el código QR con la cámara de tu teléfono móvil, inicia sesión y pulsa **Vincular TV**. La TV entrará automáticamente y cargará tus canales.
-   - **Opción 2**: Ingresa tu usuario y contraseña directamente con las flechas del control remoto.
+1. **Acceso Rápido en la TV mediante Código QR**:
+   - Al abrir la aplicación en tu Smart TV Samsung, verás el código QR de vinculación instantánea.
+   - Escanéalo con la cámara de tu teléfono celular para abrir la página oficial en GitHub Pages (`https://bersek3.github.io/M3UPLAYER/pair.html`).
+   - Inicia sesión con tu **correo electrónico o usuario** y contraseña.
+   - ¡Tu televisor iniciará sesión automáticamente y sincronizará todos tus canales!
+   - *(Opcional)*: Si deseas probar los canales sin iniciar sesión, pulsa **[ ATRÁS ]** en el control remoto para activar el **Modo Libre / Canales Demo**.
+
+2. **Subida y Gestión de Listas M3U8**:
+   - Accede a tu panel desde cualquier celular o PC (vía GitHub Pages o Render).
+   - Agrega tus enlaces `.m3u8` directos o listas completas IPTV.
+   - Los canales aparecerán automáticamente organizados por categorías con logos en tu televisor.
 
 ---
 
