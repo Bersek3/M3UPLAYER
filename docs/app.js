@@ -2,7 +2,7 @@
  * M3UTV Web Portal - Client Logic
  */
 
-const API_BASE = (window.location.hostname.includes('github.io') || window.location.protocol === 'file:') ? 'https://m3uplayer-yw7z.onrender.com' : '';
+const API_BASE = (window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app') || window.location.protocol === 'file:') ? 'https://m3uplayer-yw7z.onrender.com' : '';
 
 let currentUserToken = localStorage.getItem('m3u_web_token');
 let currentUsername = localStorage.getItem('m3u_web_user');
