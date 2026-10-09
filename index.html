@@ -3,175 +3,398 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>M3UTV Portal - Gestión de Listas y Samsung TV</title>
-    <link rel="stylesheet" href="style.css">
+    <title>M3U PLAYER - Smart TV Cloud & Web Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5.0.0">
     <script src="hls.min.js"></script>
 </head>
-<body>
-    <div id="app-wrapper">
+<body class="theme-dark">
 
-        <!-- HEADER -->
-        <header id="main-header">
-            <div class="brand">
-                <span class="brand-icon">⚡</span>
-                <h1>M3U<span class="highlight">TV</span> <span class="badge">CLOUD</span></h1>
+    <!-- GLOBAL TOP NAVBAR -->
+    <header class="app-navbar" id="app-navbar">
+        <div class="nav-left">
+            <a href="#" class="brand-logo" id="nav-brand-link">
+                <span class="brand-badge-icon">⚡</span>
+                <div class="brand-text">
+                    <span class="brand-title">M3U<span class="pink-accent">PLAYER</span></span>
+                    <span class="brand-tag">PRO CLOUD</span>
+                </div>
+            </a>
+        </div>
+
+        <nav class="nav-center">
+            <button class="nav-link-btn" id="nav-btn-home" data-view="home">Inicio</button>
+            <button class="nav-link-btn hidden" id="nav-btn-profile" data-view="profile">
+                <span class="nav-icon">👤</span> Mi Perfil & Canales
+            </button>
+            <button class="nav-live-btn" id="nav-btn-live" data-view="live">
+                <span class="live-dot"></span>
+                <span class="live-text">VER EN VIVO</span>
+                <span class="live-kbd">TV UI</span>
+            </button>
+        </nav>
+
+        <div class="nav-right">
+            <!-- Non-authenticated actions -->
+            <div class="auth-nav-buttons" id="nav-guest-actions">
+                <button class="btn-nav-outline" id="btn-open-login">Iniciar Sesión</button>
+                <button class="btn-nav-solid" id="btn-open-register">Registrarse</button>
             </div>
-            <div id="user-header-info" class="user-header-info hidden">
-                <span id="header-username" class="username-tag">Usuario</span>
-                <button id="btn-logout" class="btn-logout">Cerrar Sesión</button>
+
+            <!-- Authenticated User Profile Pill -->
+            <div class="user-profile-pill hidden" id="nav-user-pill">
+                <div class="user-avatar" id="nav-user-avatar">U</div>
+                <div class="user-meta">
+                    <span class="user-name-display" id="nav-user-name">Usuario</span>
+                    <span class="user-status-online">En línea</span>
+                </div>
+                <button class="btn-icon-logout" id="btn-logout" title="Cerrar sesión">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                </button>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- MAIN CONTAINER -->
-        <main class="content-area">
+    <!-- MAIN VIEW CONTAINER -->
+    <main class="main-viewport" id="main-viewport">
 
-            <!-- SECTION 1: AUTH (LOGIN & REGISTER) -->
-            <section id="auth-section" class="auth-card">
-                <div class="auth-tabs">
-                    <button id="tab-login" class="tab-btn active">Iniciar Sesión</button>
-                    <button id="tab-register" class="tab-btn">Crear Cuenta Nueva</button>
+        <!-- ================================================================= -->
+        <!-- VIEW 1: HOME / LANDING & GUEST HERO                               -->
+        <!-- ================================================================= -->
+        <section class="view-panel active-view" id="view-home">
+            <div class="hero-container">
+                <div class="hero-chip">
+                    <span class="chip-glow"></span>
+                    <span>Sincronización en tiempo real con Samsung Smart TV</span>
+                </div>
+                <h1 class="hero-headline">
+                    Tu Televisión en Vivo,<br>
+                    <span class="gradient-text">En Tu Smart TV y Tu Navegador.</span>
+                </h1>
+                <p class="hero-subline">
+                    Sube y administra tus listas M3U/M3U8 desde la nube. Mira tus canales autorizados con la interfaz idéntica a tu televisor Samsung.
+                </p>
+
+                <div class="hero-cta-group">
+                    <button class="btn-hero-primary" id="btn-hero-watch-live">
+                        <span class="play-triangle">▶</span> Ver en Vivo Ahora
+                    </button>
+                    <button class="btn-hero-secondary" id="btn-hero-profile-cta">
+                        <span>Ingresar a Mi Perfil</span>
+                    </button>
                 </div>
 
-                <div class="auth-body">
-                    <p id="auth-subtitle" class="auth-subtitle">Ingresa para administrar tus canales de Samsung TV</p>
+                <!-- Features Bento Grid -->
+                <div class="features-bento">
+                    <div class="bento-card">
+                        <div class="bento-icon">📺</div>
+                        <h3>Diseño Idéntico a Smart TV</h3>
+                        <p>Reproductor nativo con tira lateral vertical, EPG en tiempo real, cambio de canales fluido y reloj digital.</p>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-icon">☁️</div>
+                        <h3>Base de Datos en la Nube</h3>
+                        <p>Tus canales y credenciales guardadas de forma segura y permanente en MongoDB Atlas.</p>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-icon">⚡</div>
+                        <h3>HLS Player de Baja Latencia</h3>
+                        <p>Compatibilidad automática con transmisiones m3u8 directas, streams adaptive bitrate y CORS proxies.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-                    <form id="auth-form">
-                        <div class="input-group">
-                            <label for="auth-username">Nombre de Usuario:</label>
-                            <input type="text" id="auth-username" required placeholder="ej. francisco11" autocomplete="username">
+        <!-- ================================================================= -->
+        <!-- VIEW 2: USER PROFILE & CHANNELS MANAGEMENT                        -->
+        <!-- ================================================================= -->
+        <section class="view-panel" id="view-profile">
+            <div class="profile-layout">
+                
+                <!-- Profile Header Card -->
+                <div class="profile-banner-card">
+                    <div class="profile-info-left">
+                        <div class="profile-large-avatar" id="profile-large-avatar">U</div>
+                        <div class="profile-details">
+                            <div class="profile-name-row">
+                                <h2 id="profile-display-name">Mi Perfil</h2>
+                                <span class="badge-tag-pro">Cuenta Activa</span>
+                            </div>
+                            <p class="profile-meta-text">
+                                Canales habilitados: <strong id="profile-total-channels-badge">0</strong> | Listas conectadas: <strong id="profile-total-playlists-badge">0</strong>
+                            </p>
                         </div>
-
-                        <div class="input-group">
-                            <label for="auth-password">Contraseña:</label>
-                            <input type="password" id="auth-password" required placeholder="••••••••" autocomplete="current-password">
-                        </div>
-
-                        <div id="auth-error" class="alert-error hidden"></div>
-                        <div id="auth-success" class="alert-success hidden"></div>
-
-                        <button type="submit" id="btn-auth-submit" class="btn-primary">
-                            <span id="auth-btn-text">Entrar al Panel</span>
+                    </div>
+                    <div class="profile-quick-actions">
+                        <button class="btn-hero-primary compact" id="btn-profile-launch-live">
+                            <span>▶ VER EN VIVO</span>
                         </button>
-                    </form>
-
-                    <div class="tv-notice-box">
-                        <span class="notice-icon">📺</span>
-                        <p>Una vez que te registres aquí, podrás abrir la app en tu televisor Samsung e iniciar sesión con este mismo usuario.</p>
                     </div>
                 </div>
-            </section>
 
-            <!-- SECTION 2: USER DASHBOARD (SHOWN WHEN LOGGED IN) -->
-            <section id="dashboard-section" class="dashboard-container hidden">
-
-                <!-- TV PAIRING BANNER -->
-                <div class="tv-banner">
-                    <div class="banner-text">
-                        <h3>📺 Vincula tu Samsung Smart TV</h3>
-                        <p>Para ver tus canales en la tele: Abre la app en tu Smart TV e inicia sesión con tu usuario: <strong id="banner-user-display" class="highlight-user">usuario</strong></p>
+                <!-- Smart TV Sync Notice -->
+                <div class="tv-sync-alert">
+                    <div class="sync-icon">📡</div>
+                    <div class="sync-text">
+                        <h4>Sincronización con Samsung Smart TV</h4>
+                        <p>Inicia sesión en la aplicación de tu Samsung TV con este usuario: <strong class="user-highlight" id="profile-sync-username">usuario</strong> para reproducir exactamente estos canales.</p>
                     </div>
-                    <div class="banner-badge">Sincronización Automática</div>
                 </div>
 
-                <!-- ADD LISTS TABS & FORMS -->
-                <div class="card add-playlist-card">
-                    <h2>Administrar Listas M3U</h2>
-                    <p class="subtitle">Sube un archivo de tu dispositivo o pega un enlace de internet</p>
+                <!-- Tabs: Canales Habilitados vs Gestionar Listas -->
+                <div class="profile-tabs-header">
+                    <button class="profile-tab-btn active" id="tab-my-channels">
+                        <span>📺 Canales Habilitados (<span id="profile-channels-tab-count">0</span>)</span>
+                    </button>
+                    <button class="profile-tab-btn" id="tab-manage-playlists">
+                        <span>⚙️ Administrar Listas M3U</span>
+                    </button>
+                </div>
 
-                    <div class="sub-tabs">
-                        <button id="btn-tab-url" class="sub-tab-btn active">🌐 Enlace Remoto (URL)</button>
-                        <button id="btn-tab-file" class="sub-tab-btn">📁 Subir Archivo Local (.m3u)</button>
+                <!-- TAB 1 CONTENT: Canales Habilitados Explorer -->
+                <div class="tab-pane active" id="pane-my-channels">
+                    <div class="channels-controls-bar">
+                        <div class="search-input-wrap">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="profile-search-input" placeholder="Buscar canal por nombre, número o categoría...">
+                        </div>
+                        <div class="categories-scroll-row" id="profile-categories-bar">
+                            <!-- Injected dynamically -->
+                        </div>
                     </div>
 
-                    <!-- FORM 1: REMOTE URL -->
-                    <form id="form-url" class="tab-content-pane">
-                        <div class="input-group">
-                            <label for="playlist-url">URL de la Lista M3U / M3U8 o Canal HLS Directo:</label>
-                            <input type="url" id="playlist-url" required placeholder="https://ejemplo.com/lista.m3u8 o https://.../stream.m3u8">
-                            <small style="display:block;margin-top:6px;color:#94a3b8;font-size:12px;">✅ 100% compatible con listas completas (.m3u, .m3u8) y enlaces de transmisión directa (.m3u8).</small>
-                        </div>
-                        <div class="input-group">
-                            <label for="playlist-name-url">Nombre de la lista o canal (Opcional):</label>
-                            <input type="text" id="playlist-name-url" placeholder="ej. Mis Canales IPTV o Canal En Vivo">
-                        </div>
-                        <button type="submit" class="btn-primary" id="btn-submit-url">
-                            <span>🚀 Guardar y Sincronizar con TV</span>
-                        </button>
-                    </form>
+                    <div class="user-channels-grid" id="profile-channels-grid">
+                        <!-- Channel Cards injected dynamically -->
+                    </div>
+                </div>
 
-                    <!-- FORM 2: LOCAL FILE UPLOAD -->
-                    <form id="form-file" class="tab-content-pane hidden">
-                        <div class="file-dropzone" id="dropzone">
-                            <input type="file" id="playlist-file" accept=".m3u,.m3u8,.txt" style="display: none;">
-                            <div class="dropzone-content">
-                                <span class="dropzone-icon">📁</span>
-                                <p>Toca aquí para seleccionar tu archivo <strong>.m3u</strong> o <strong>.m3u8</strong></p>
-                                <span id="file-chosen-label" class="file-chosen-label">Ningún archivo seleccionado</span>
+                <!-- TAB 2 CONTENT: Administrar Listas M3U (Cargar / Eliminar) -->
+                <div class="tab-pane" id="pane-manage-playlists">
+                    <div class="manage-grid">
+                        
+                        <!-- Upload New Playlist Form -->
+                        <div class="form-card">
+                            <h3>Agregar Nueva Lista o Canal</h3>
+                            <p class="card-desc">Agrega una URL remota de internet o carga un archivo .m3u desde tu equipo.</p>
+
+                            <div class="subtabs-source">
+                                <button class="btn-subtab active" id="btn-subtab-url">🌐 URL Remota</button>
+                                <button class="btn-subtab" id="btn-subtab-file">📁 Archivo .M3U</button>
+                            </div>
+
+                            <!-- Form URL -->
+                            <form id="form-add-url" class="source-form-pane">
+                                <div class="form-field">
+                                    <label for="input-playlist-url">URL de la Lista M3U o Canal Directo (.m3u8):</label>
+                                    <input type="url" id="input-playlist-url" required placeholder="https://ejemplo.com/canales.m3u8">
+                                </div>
+                                <div class="form-field">
+                                    <label for="input-playlist-name-url">Nombre de la lista (opcional):</label>
+                                    <input type="text" id="input-playlist-name-url" placeholder="ej. Mis Canales IPTV">
+                                </div>
+                                <button type="submit" class="btn-submit-action" id="btn-submit-url">
+                                    <span>🚀 Guardar y Actualizar Canales</span>
+                                </button>
+                            </form>
+
+                            <!-- Form File -->
+                            <form id="form-add-file" class="source-form-pane hidden">
+                                <div class="dropzone-box" id="profile-dropzone">
+                                    <input type="file" id="input-playlist-file" accept=".m3u,.m3u8,.txt" style="display:none;">
+                                    <span class="dropzone-icon">📁</span>
+                                    <p class="dropzone-title">Haz clic aquí para seleccionar tu archivo</p>
+                                    <span class="dropzone-hint" id="profile-file-chosen">Ningún archivo cargado (.m3u, .m3u8)</span>
+                                </div>
+                                <div class="form-field" style="margin-top:14px;">
+                                    <label for="input-playlist-name-file">Nombre de la lista (opcional):</label>
+                                    <input type="text" id="input-playlist-name-file" placeholder="ej. Lista Personal">
+                                </div>
+                                <button type="submit" class="btn-submit-action" id="btn-submit-file" disabled>
+                                    <span>📤 Subir Archivo y Procesar</span>
+                                </button>
+                            </form>
+
+                            <div id="playlist-action-feedback" class="action-feedback hidden"></div>
+                        </div>
+
+                        <!-- Active Playlists List -->
+                        <div class="active-playlists-card">
+                            <div class="playlists-card-header">
+                                <h3>Listas Activas Guardadas</h3>
+                                <button class="btn-refresh-pill" id="btn-refresh-playlists">🔄 Actualizar</button>
+                            </div>
+                            <div class="playlists-container" id="profile-playlists-list">
+                                <!-- Injected dynamically -->
                             </div>
                         </div>
-                        <div class="input-group" style="margin-top: 14px;">
-                            <label for="playlist-name-file">Nombre de la lista (Opcional):</label>
-                            <input type="text" id="playlist-name-file" placeholder="ej. Canales de Cable">
-                        </div>
-                        <button type="submit" class="btn-primary" id="btn-submit-file" disabled>
-                            <span>📤 Subir y Guardar en la Nube</span>
-                        </button>
-                    </form>
 
-                    <div id="playlist-feedback" class="feedback-msg hidden"></div>
-                </div>
-
-                <!-- MY PLAYLISTS SUMMARY -->
-                <div class="card playlists-summary-card">
-                    <div class="card-header-flex">
-                        <h2>Mis Listas Activas</h2>
-                        <button id="btn-refresh" class="btn-ghost">🔄 Refrescar</button>
-                    </div>
-                    <div id="playlists-list" class="playlists-list">
-                        <!-- Injected dynamically -->
                     </div>
                 </div>
 
-                <!-- CHANNELS EXPLORER -->
-                <div class="card channels-explorer-card">
-                    <div class="card-header-flex">
-                        <div>
-                            <h2>Canales Sincronizados (<span id="total-channels-count">0</span>)</h2>
-                            <p class="subtitle">Estos son los canales que se verán en tu Samsung Smart TV</p>
-                        </div>
-                        <div class="search-wrap">
-                            <input type="text" id="web-search" placeholder="🔍 Filtrar canal...">
-                        </div>
-                    </div>
+            </div>
+        </section>
 
-                    <!-- Category Pills -->
-                    <div id="web-categories" class="categories-bar"></div>
-
-                    <!-- Channel Cards Grid -->
-                    <div id="web-channels-grid" class="web-channels-grid">
-                        <!-- Injected dynamically -->
-                    </div>
+        <!-- ================================================================= -->
+        <!-- VIEW 3: VER EN VIVO (IDENTICAL SAMSUNG SMART TV DESIGN)          -->
+        <!-- ================================================================= -->
+        <section class="view-panel" id="view-live">
+            <div class="tv-screen-wrapper" id="tv-screen-wrapper">
+                
+                <!-- FULLSCREEN VIDEO CONTAINER -->
+                <div class="tv-video-container" id="tv-video-container">
+                    <video id="tv-main-video" autoplay playsinline></video>
                 </div>
 
-                <!-- PREVIEW MODAL PLAYER -->
-                <div id="preview-modal" class="modal-backdrop hidden">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h3 id="modal-channel-title">Reproductor Web</h3>
-                            <button id="btn-close-preview" class="btn-close">&times;</button>
-                        </div>
-                        <div class="modal-video-box">
-                            <video id="web-player" controls preload="none" playsinline></video>
-                        </div>
-                    </div>
+                <!-- VIDEO VIGNETTE OVERLAY FOR TV READABILITY -->
+                <div class="tv-vignette-overlay" id="tv-vignette"></div>
+
+                <!-- BUFFERING SPINNER -->
+                <div id="tv-player-buffering" class="tv-buffering-badge hidden">
+                    <div class="tv-spinner"></div>
+                    <span>Cargando señal en vivo...</span>
                 </div>
 
-            </section>
+                <!-- ERROR NOTIFICATION -->
+                <div id="tv-player-error" class="tv-error-badge hidden">
+                    <span class="err-icon">⚠️</span>
+                    <span id="tv-error-text">Canal no disponible temporalmente</span>
+                </div>
 
-        </main>
+                <!-- TOP RIGHT WATERMARK LOGO -->
+                <div class="tv-watermark-wrap" id="tv-watermark-wrap">
+                    <img id="tv-watermark-img" src="" alt="" class="tv-watermark-logo hidden">
+                </div>
 
+                <!-- TOP BAR CONTROLS FOR WEB (Fullscreen, Toggle UI, Volver al Perfil) -->
+                <div class="tv-web-top-controls" id="tv-web-top-controls">
+                    <button class="btn-tv-ctrl" id="btn-tv-exit-view" title="Volver al Perfil">
+                        <span>← Salir del Modo TV</span>
+                    </button>
+                    <button class="btn-tv-ctrl" id="btn-tv-toggle-menu" title="Ocultar/Mostrar Menú">
+                        <span>👁️ Menú de Canales</span>
+                    </button>
+                    <button class="btn-tv-ctrl" id="btn-tv-fullscreen" title="Pantalla Completa">
+                        <span>⛶ Pantalla Completa</span>
+                    </button>
+                </div>
+
+                <!-- TV LIVE OVERLAY (CHANNELS BAR + EPG) -->
+                <div class="tv-main-overlay" id="tv-main-overlay">
+                    
+                    <div class="tv-live-interface">
+                        <!-- VERTICAL CAROUSEL CHANNELS STRIP -->
+                        <div class="tv-vertical-channels-bar" id="tv-vertical-bar">
+                            <div class="tv-channels-scroll-list" id="tv-channels-scroll-list">
+                                <!-- Injected dynamically:
+                                <div class="channel-nav-item active">
+                                    <span class="ch-num">001</span>
+                                    <div class="ch-logo-wrap"><img ...></div>
+                                </div>
+                                -->
+                            </div>
+                        </div>
+
+                        <!-- FLOATING EPG CARDS ROW -->
+                        <div class="tv-epg-cards-container" id="tv-epg-container">
+                            <!-- Card 1: EN VIVO -->
+                            <div class="tv-epg-card tv-epg-live" id="tv-card-current">
+                                <div class="tv-epg-header">
+                                    <span class="tv-badge-live">En vivo</span>
+                                    <span class="tv-badge-time-left" id="tv-epg-time-left">Quedan 43 min</span>
+                                </div>
+                                <div class="tv-epg-footer">
+                                    <h3 class="tv-epg-title" id="tv-epg-title-current">Programa En Vivo</h3>
+                                    <p class="tv-epg-subtitle" id="tv-epg-sub-current">Transmisión en directo</p>
+                                    <div class="tv-epg-progress-bar">
+                                        <div class="tv-epg-progress-fill" id="tv-epg-progress-fill" style="width: 55%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: PRÓXIMO PROGRAMA -->
+                            <div class="tv-epg-card tv-epg-next" id="tv-card-next">
+                                <div class="tv-epg-header">
+                                    <span class="tv-badge-upcoming" id="tv-epg-upcoming-time">Comienza a las 13:00</span>
+                                </div>
+                                <div class="tv-epg-footer">
+                                    <h3 class="tv-epg-title" id="tv-epg-title-next">Próximo Programa</h3>
+                                    <p class="tv-epg-subtitle" id="tv-epg-sub-next">A continuación</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTTOM RIGHT REAL-TIME CLOCK -->
+                    <div class="tv-bottom-brand-clock">
+                        <span id="tv-realtime-clock" class="tv-clock-digits">12:00</span>
+                    </div>
+
+                    <!-- TV KEYBOARD HINT FOOTER -->
+                    <div class="tv-bottom-hints">
+                        <span>[▲ / ▼] Cambiar Canal</span>
+                        <span>[M / Click] Mostrar / Ocultar Menú</span>
+                        <span>[F] Pantalla Completa</span>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- AUTH MODAL (LOGIN / REGISTER POPUP)                              -->
+    <!-- ================================================================= -->
+    <div class="modal-backdrop hidden" id="modal-auth">
+        <div class="auth-modal-card">
+            <button class="btn-modal-close" id="btn-close-auth-modal">&times;</button>
+            
+            <div class="auth-modal-header">
+                <div class="auth-brand-badge">⚡ M3U PLAYER</div>
+                <div class="auth-tabs-toggle">
+                    <button class="tab-toggle-btn active" id="tab-login-btn">Iniciar Sesión</button>
+                    <button class="tab-toggle-btn" id="tab-register-btn">Crear Cuenta</button>
+                </div>
+                <p class="auth-modal-subtitle" id="auth-modal-subtitle">
+                    Ingresa con tus credenciales para ver y gestionar tus canales
+                </p>
+            </div>
+
+            <form id="auth-modal-form" class="auth-modal-form">
+                <div class="form-field">
+                    <label for="modal-username">Usuario o Correo:</label>
+                    <input type="text" id="modal-username" required placeholder="ej. francisco11" autocomplete="username">
+                </div>
+                <div class="form-field">
+                    <label for="modal-password">Contraseña:</label>
+                    <input type="password" id="modal-password" required placeholder="••••••••" autocomplete="current-password">
+                </div>
+
+                <div id="modal-auth-error" class="alert-box alert-error hidden"></div>
+                <div id="modal-auth-success" class="alert-box alert-success hidden"></div>
+
+                <button type="submit" class="btn-auth-submit" id="btn-auth-submit">
+                    <span id="auth-btn-label">Iniciar Sesión</span>
+                </button>
+            </form>
+
+            <div class="auth-footer-notice">
+                <span>📺</span>
+                <p>Usa este mismo usuario en tu televisor Samsung para sincronizar automáticamente todos tus canales.</p>
+            </div>
+        </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast-notify" class="toast-popup hidden"></div>
+
+    <script src="app.js?v=5.0.0"></script>
 </body>
 </html>
