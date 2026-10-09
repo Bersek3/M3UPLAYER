@@ -1,0 +1,191 @@
+[
+  {
+    "number": "001",
+    "name": "Mega",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/455_Mega.png",
+    "url": "https://unlimited1-cl-isp.dps.live/mega/mega.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "002",
+    "name": "CHV Noticias",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1153_CHV.png",
+    "url": "https://mdstrm.com/live-stream-playlist/6491ced935a5833c47dd7f41.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "003",
+    "name": "TVN 24 Horas",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/448_TVN_24_Horas.png",
+    "url": "https://mdstrm.com/live-stream-playlist/57d1a22064f5d85712b20dab.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "004",
+    "name": "TV Chile",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/448_TVN_24_Horas.png",
+    "url": "https://mdstrm.com/live-stream-playlist/533adcc949386ce765657d7c.m3u8"
+  },
+  {
+    "number": "005",
+    "name": "TVN3",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1437_TVN3.png",
+    "url": "https://mdstrm.com/live-stream-playlist/5653641561b4eba30a7e4929.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "006",
+    "name": "NTV",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/45_NTV.png",
+    "url": "https://mdstrm.com/live-stream-playlist/5aaabe9e2c56420918184c6d.m3u8"
+  },
+  {
+    "number": "007",
+    "name": "TV+",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/458_TV_.png",
+    "url": "https://redirector.rudo.video/hls-video/ey6283je82983je9823je8jowowiekldk9838274/tvmas/tvmas.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "008",
+    "name": "T13",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1054_T13.png",
+    "url": "https://redirector.rudo.video/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/t13/t13.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "009",
+    "name": "T13 Radio",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1198_T13_Radio.png",
+    "url": "https://unlimited1-cl-isp.dps.live/t13radio/t13radio.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "010",
+    "name": "13 Cultura",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1193_13_Cultura.png",
+    "url": "https://redirector.dps.live/hls/13cultura/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "011",
+    "name": "13 Cocina",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1683_13_Cocina.png",
+    "url": "https://redirector.dps.live/hls/13cocina/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "012",
+    "name": "13 Pop",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1033_13_Pop.png",
+    "url": "https://redirector.dps.live/hls/13pop/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "013",
+    "name": "13 Teleseries",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1032_13_Teleseries.png",
+    "url": "https://redirector.dps.live/hls/13t/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "014",
+    "name": "13 Festival",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1446_13_Festival.png",
+    "url": "https://redirector.dps.live/hls/13festival/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "015",
+    "name": "13 Realities",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1448_13_Realities.png",
+    "url": "https://redirector.dps.live/hls/13realities/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "016",
+    "name": "13 Viajes",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1684_13_Viajes.png",
+    "url": "https://redirector.dps.live/hls/13viajes/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "017",
+    "name": "U Chile TV",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1017_U_Chile_TV.png",
+    "url": "https://unlimited1-cl-isp.dps.live/uchiletv/uchiletv.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "018",
+    "name": "UCV",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/54_UCV.png",
+    "url": "https://unlimited2-cl-isp.dps.live/ucvtv2/ucvtv2.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "019",
+    "name": "UCV 2",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/1152_UCV_2.png",
+    "url": "https://unlimited1-cl-isp.dps.live/ucvtveventos/ucvtveventos.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "number": "020",
+    "name": "TVN",
+    "group": "Nacional",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/3/33/Logotipo_de_Televisi%C3%B3n_Nacional_de_Chile.svg",
+    "url": "https://mdstrm.com/live-stream-playlist-v/555c9a91eb4886825b07ee7b.m3u8"
+  },
+  {
+    "number": "021",
+    "name": "Chilevisión",
+    "group": "Nacional",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/8/87/Emblema_de_Chilevisi%C3%B3n.svg",
+    "url": "https://redirector.rudo.video/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/chv/chv.smil/playlist.m3u8"
+  },
+  {
+    "number": "022",
+    "name": "Canal 13 HD",
+    "group": "Nacional",
+    "logo": "https://cdn.m3u.cl/logo/457_Canal_13.png",
+    "url": "https://jireh-9-hls-video-cl-movistar.dps.live/hls-video/ey6283je82983je9823je8jowowiekldk9838274/13live/13live.smil/13live/livestream1/chunks.m3u8"
+  },
+  {
+    "number": "023",
+    "name": "BioBio TV",
+    "group": "Noticias",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Biobio_TV_logo.jpg",
+    "url": "https://redirector.rudo.video/hls-video/339f69c6122f6d8f4574732c235f09b7683e31a5/bbtv/bbtv.smil/playlist.m3u8"
+  },
+  {
+    "number": "024",
+    "name": "Radio Carolina TV",
+    "group": "Música",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/b/b8/Logo_Radio_Carolina_2020.png",
+    "url": "https://mdstrm.com/live-stream-playlist/63a06468117f42713374addd.m3u8"
+  },
+  {
+    "number": "025",
+    "name": "Radio Cooperativa",
+    "group": "Música / Noticias",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Radio_Cooperativa_Logo.svg",
+    "url": "https://unlimited1-cl-isp.dps.live/coopetv/coopetv.smil/playlist.m3u8"
+  },
+  {
+    "number": "026",
+    "name": "Radio ADN TV",
+    "group": "Música / Noticias",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/c/c2/ADN_Radio_Chile.svg",
+    "url": "https://redirector.rudo.video/hls-video/931b584451fa6dd1313ee66efbfd5802e3f3bcea/adntv/adntv.smil/playlist.m3u8"
+  },
+  {
+    "number": "027",
+    "name": "Tevex",
+    "group": "General",
+    "logo": "https://tevex.cl/wp-content/uploads/2021/01/logo_tevex_formato_3.svg",
+    "url": "https://v4.tustreaming.cl:443/tevexinter/index.m3u8"
+  }
+]

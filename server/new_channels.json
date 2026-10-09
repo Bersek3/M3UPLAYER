@@ -1,0 +1,140 @@
+[
+  {
+    "name": "Mega",
+    "logo": "https://cdn.m3u.cl/logo/455_Mega.png",
+    "group": "Nacional",
+    "url": "https://unlimited1-cl-isp.dps.live/mega/mega.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "CHV Noticias",
+    "logo": "https://cdn.m3u.cl/logo/1153_CHV.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/6491ced935a5833c47dd7f41.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "CHV Deportes",
+    "logo": "https://cdn.m3u.cl/logo/1569_CHV_Deportes.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/6531749eaf244059b3ade17b.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "TVN 24 Horas",
+    "logo": "https://cdn.m3u.cl/logo/448_TVN_24_Horas.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/57d1a22064f5d85712b20dab.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "TV Chile",
+    "logo": "https://cdn.m3u.cl/logo/448_TVN_24_Horas.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/533adcc949386ce765657d7c.m3u8"
+  },
+  {
+    "name": "TVN3",
+    "logo": "https://cdn.m3u.cl/logo/1437_TVN3.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/5653641561b4eba30a7e4929.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "NTV",
+    "logo": "https://cdn.m3u.cl/logo/45_NTV.png",
+    "group": "Nacional",
+    "url": "https://mdstrm.com/live-stream-playlist/5aaabe9e2c56420918184c6d.m3u8"
+  },
+  {
+    "name": "La Red",
+    "logo": "https://cdn.m3u.cl/logo/790_La_Red.png",
+    "group": "Nacional",
+    "url": "https://alba-cl-lared-lared.stream.mediatiquestream.com/index.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "TV+",
+    "logo": "https://cdn.m3u.cl/logo/458_TV_.png",
+    "group": "Nacional",
+    "url": "https://redirector.rudo.video/hls-video/ey6283je82983je9823je8jowowiekldk9838274/tvmas/tvmas.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "Canal 13",
+    "logo": "https://cdn.m3u.cl/logo/457_Canal_13.png",
+    "group": "Nacional",
+    "url": "https://m3u.cl/channel/c13.php?PlaylistM3UCL"
+  },
+  {
+    "name": "T13",
+    "logo": "https://cdn.m3u.cl/logo/1054_T13.png",
+    "group": "Nacional",
+    "url": "https://redirector.rudo.video/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/t13/t13.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Deportes",
+    "logo": "https://cdn.m3u.cl/logo/457_Canal_13.png",
+    "group": "Nacional",
+    "url": "https://redirector.rudo.video/hls-video/ey6283je82983je9823je8jowowiekldk9838274/13d/13d.smil/playlist.m3u8"
+  },
+  {
+    "name": "T13 Radio",
+    "logo": "https://cdn.m3u.cl/logo/1198_T13_Radio.png",
+    "group": "Nacional",
+    "url": "https://unlimited1-cl-isp.dps.live/t13radio/t13radio.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Cultura",
+    "logo": "https://cdn.m3u.cl/logo/1193_13_Cultura.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13cultura/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Cocina",
+    "logo": "https://cdn.m3u.cl/logo/1683_13_Cocina.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13cocina/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Pop",
+    "logo": "https://cdn.m3u.cl/logo/1033_13_Pop.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13pop/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Teleseries",
+    "logo": "https://cdn.m3u.cl/logo/1032_13_Teleseries.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13t/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Festival",
+    "logo": "https://cdn.m3u.cl/logo/1446_13_Festival.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13festival/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Realities",
+    "logo": "https://cdn.m3u.cl/logo/1448_13_Realities.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13realities/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "13 Viajes",
+    "logo": "https://cdn.m3u.cl/logo/1684_13_Viajes.png",
+    "group": "Nacional",
+    "url": "https://redirector.dps.live/hls/13viajes/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "U Chile TV",
+    "logo": "https://cdn.m3u.cl/logo/1017_U_Chile_TV.png",
+    "group": "Nacional",
+    "url": "https://unlimited1-cl-isp.dps.live/uchiletv/uchiletv.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "UCV",
+    "logo": "https://cdn.m3u.cl/logo/54_UCV.png",
+    "group": "Nacional",
+    "url": "https://unlimited2-cl-isp.dps.live/ucvtv2/ucvtv2.smil/playlist.m3u8?PlaylistM3UCL"
+  },
+  {
+    "name": "UCV 2",
+    "logo": "https://cdn.m3u.cl/logo/1152_UCV_2.png",
+    "group": "Nacional",
+    "url": "https://unlimited1-cl-isp.dps.live/ucvtveventos/ucvtveventos.smil/playlist.m3u8?PlaylistM3UCL"
+  }
+]

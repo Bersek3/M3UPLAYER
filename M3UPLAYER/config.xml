@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/tizen" id="http://yourdomain/M3UPLAYER" version="1.3.1" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/tizen" id="http://yourdomain/M3UPLAYER" version="1.4.1" width="1920" height="1080" viewmodes="maximized">
    <name>M3U Player Pro</name>
    <description>Reproductor IPTV M3U Moderno para Samsung Smart TV</description>
    <icon src="icon.png"/>
@@ -10,8 +10,12 @@
    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
    <tizen:privilege name="http://tizen.org/privilege/internet"/>
    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+   <tizen:privilege name="http://tizen.org/privilege/tv.audio"/>
+   <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+   <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
    <access origin="*" subdomains="true"/>
    <tizen:allow-navigation>*</tizen:allow-navigation>
+   <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; media-src * blob: data: http: https:; connect-src * http: https: ws: wss:;</tizen:content-security-policy>
    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
    <tizen:profile name="tv-samsung"/>
 </widget>

@@ -453,6 +453,46 @@ app.post('/api/auth/pair/approve', authenticate, async (req, res) => {
 // PLAYLIST & CHANNELS ROUTES
 // ==========================================================================
 
+// Get default / database enabled channels (no auth required for direct TV viewing)
+app.get(['/api/channels', '/api/public/channels'], async (req, res) => {
+    try {
+        if (!playlistsCol) {
+            return res.json({ success: true, channels: [] });
+        }
+        // Fetch all playlists configured in database
+        const playlists = await playlistsCol.find().sort({ updatedAt: -1 }).toArray();
+        let allChannels = [];
+        let counter = 1;
+        const seenNames = new Set();
+
+        playlists.forEach(pl => {
+            if (Array.isArray(pl.channels)) {
+                pl.channels.forEach(ch => {
+                    const key = (ch.name || '').trim().toLowerCase();
+                    if (!seenNames.has(key)) {
+                        seenNames.add(key);
+                        allChannels.push({
+                            ...ch,
+                            number: String(counter).padStart(3, '0'),
+                            playlistName: pl.name
+                        });
+                        counter++;
+                    }
+                });
+            }
+        });
+
+        res.json({
+            success: true,
+            channels: allChannels,
+            channelCount: allChannels.length
+        });
+    } catch (err) {
+        console.error('Fetch public channels error:', err);
+        res.status(500).json({ error: 'Error al obtener canales' });
+    }
+});
+
 // Get user's combined channels (used by Samsung TV and Web Portal)
 app.get('/api/user/channels', authenticate, async (req, res) => {
     try {

@@ -2,338 +2,131 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>M3U TV Pro - Samsung Smart TV</title>
-    <link rel="stylesheet" href="css/style.css?v=3.0.0">
-    <!-- Local streaming and QR code libraries for Samsung Tizen TV -->
+    <meta name="viewport" content="width=1920, height=1080, user-scalable=no">
+    <title>Samsung Smart TV - M3U Live Player</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob: gap:; media-src * blob: data: http: https:; connect-src * http: https: ws: wss:;">
+    <link rel="stylesheet" href="css/style.css?v=4.0.3">
     <script src="hls.min.js"></script>
-    <script src="qrcode.min.js"></script>
 </head>
-<body class="tv-mode">
+<body class="tv-body">
 
-    <!-- MAIN APP CONTAINER (Dynamic TV Safe Area for 720p / 1080p / 4K / 8K) -->
-    <div id="app-container">
-
-        <!-- SLEEK GLASS TOPBAR -->
-        <header id="top-bar">
-            <div class="brand-section">
-                <div class="brand-logo">
-                    <span class="brand-icon">⚡</span>
-                    <span class="brand-name">M3U<span class="brand-highlight">TV</span></span>
-                </div>
-                <div class="brand-badge">SAMSUNG SMART TV</div>
-            </div>
-
-            <!-- SEARCH BAR (D-PAD / REMOTE ACCESSIBLE) -->
-            <div class="search-container">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="channel-search" placeholder="Buscar por nombre o número..." autocomplete="off">
-            </div>
-
-            <!-- HEADER ACTIONS & SYSTEM STATUS -->
-            <div class="header-actions">
-                <div id="clock-display" class="clock-badge">--:--</div>
-                <div id="network-status" class="status-indicator-badge">
-                    <span class="pulse-dot"></span> EN LÍNEA
-                </div>
-                <!-- ACCOUNT / QR PAIRING BUTTON -->
-                <button id="btn-user-account" class="btn-account-header" title="Vincular Cuenta">
-                    <span id="account-btn-icon">📱</span>
-                    <span id="account-btn-label">Vincular Celular (QR)</span>
-                </button>
-                <button id="btn-open-settings" class="btn-settings-header" title="Ajustes y Listas">
-                    <span>⚙️ Ajustes</span>
-                    <span class="key-shortcut-tag">1234</span>
-                </button>
-            </div>
-        </header>
-
-        <!-- SPOTLIGHT HERO BANNER (REAL-TIME FOCUSED CHANNEL SHOWCASE) -->
-        <section id="channel-spotlight" class="channel-spotlight">
-            <div class="spotlight-left">
-                <div class="spotlight-logo-wrap">
-                    <img id="spotlight-logo" class="spotlight-logo" src="" alt="" onerror="handleSpotlightLogoError(this)">
-                    <div id="spotlight-fallback-logo" class="spotlight-fallback-logo hidden">TV</div>
-                </div>
-                <div class="spotlight-details">
-                    <div class="spotlight-badges">
-                        <span id="spotlight-number" class="spotlight-badge-num">#001</span>
-                        <span id="spotlight-group" class="spotlight-badge-group">General</span>
-                        <span class="spotlight-badge-live"><span class="pulse-dot"></span> EN VIVO</span>
-                        <span class="spotlight-badge-quality">FULL HD 1080p</span>
-                    </div>
-                    <h1 id="spotlight-name" class="spotlight-title">Cargando canales...</h1>
-                    <p id="spotlight-desc" class="spotlight-desc">Usa las flechas del control para navegar. Presiona [OK] para reproducir en vivo.</p>
-                </div>
-            </div>
-            <div class="spotlight-right">
-                <button id="btn-spotlight-play" class="btn-spotlight-action">
-                    <span class="play-icon-tri">▶</span>
-                    <span>Ver Canal (OK)</span>
-                </button>
-                <div class="spotlight-hints">
-                    <span>[▲▼◄►] Navegar</span>
-                    <span>[1234] Ajustes</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- HORIZONTAL CATEGORY BAR -->
-        <nav id="category-bar">
-            <div id="category-list" class="category-scroll-container">
-                <!-- Dynamically injected: [⭐ Todos] [📺 General] [📰 Noticias] [⚽ Deportes] etc. -->
-            </div>
-        </nav>
-
-        <!-- MAIN CHANNELS SECTION -->
-        <main id="main-content">
-            <div class="section-header">
-                <div class="category-title-wrap">
-                    <h2 id="current-category-title">Todos los Canales</h2>
-                    <span id="channel-count-badge" class="count-badge">0 canales</span>
-                </div>
-                <div class="remote-hint-badge">
-                    <span>[▲] Categorías</span>
-                    <span>[OK] Pantalla Completa</span>
-                    <span>[ATRÁS] Salir</span>
-                </div>
-            </div>
-
-            <!-- CHANNELS RESPONSIVE 2D GRID -->
-            <div id="channels-grid" class="channels-grid">
-                <!-- Channel cards injected dynamically -->
-            </div>
-
-            <!-- EMPTY STATE -->
-            <div id="empty-state" class="empty-state hidden">
-                <div class="empty-icon">📺</div>
-                <h3>No hay canales disponibles</h3>
-                <p id="empty-state-desc">Escanea el código QR desde tu celular o agrega tu lista .m3u8 en Ajustes.</p>
-                <div class="empty-actions">
-                    <button id="btn-empty-demo" class="btn-primary">▶ Cargar Canales Demo</button>
-                    <button id="btn-empty-qr" class="btn-primary-glow">📱 Iniciar Sesión con QR</button>
-                    <button id="btn-empty-settings" class="btn-secondary">⚙️ Ajustes</button>
-                </div>
-            </div>
-        </main>
-
-    </div>
-
-    <!-- FULLSCREEN IMMERSIVE PLAYER -->
-    <div id="player-overlay" class="player-overlay hidden">
+    <!-- FULLSCREEN VIDEO BACKGROUND -->
+    <div id="video-container" class="video-container">
         <video id="main-video" autoplay playsinline></video>
+    </div>
 
-        <!-- LOADING SPINNER -->
-        <div id="player-buffering" class="player-buffering hidden">
-            <div class="large-spinner"></div>
-            <p>Conectando señal en vivo...</p>
-        </div>
+    <!-- BUFFERING SPINNER -->
+    <div id="player-buffering" class="player-buffering hidden">
+        <div class="tv-spinner"></div>
+        <span>Cargando señal...</span>
+    </div>
 
-        <!-- ERROR OVERLAY -->
-        <div id="player-error" class="player-error hidden">
-            <div class="error-box">
-                <span class="error-icon">⚠️</span>
-                <h3>Canal temporalmente no disponible</h3>
-                <p id="player-error-msg">La señal no responde o el enlace M3U8 ha expirado.</p>
-                <div class="error-actions">
-                    <button id="btn-retry-stream" class="btn-secondary">Reintentar</button>
-                    <button id="btn-close-player" class="btn-primary">Volver a la Guía</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ON-SCREEN DISPLAY (OSD BANNER) -->
-        <div id="player-osd" class="player-osd">
-            <div class="osd-content">
-                <div class="osd-logo-container">
-                    <img id="osd-logo" src="" alt="" onerror="handleLogoError(this, '')">
-                </div>
-                <div class="osd-info">
-                    <div class="osd-meta">
-                        <span id="osd-number" class="osd-badge-number">#001</span>
-                        <span id="osd-group" class="osd-badge-group">General</span>
-                        <span class="osd-badge-live">● EN VIVO</span>
-                        <span id="osd-clock" class="osd-clock">--:--</span>
-                    </div>
-                    <h2 id="osd-title" class="osd-channel-name">Nombre del Canal</h2>
-                </div>
-            </div>
-            <div class="osd-hints">
-                <span>▲ ▼ Cambiar Canal</span>
-                <span>◄ ► o OK Guía Lateral</span>
-                <span>ATRÁS Volver al Menú</span>
-            </div>
-        </div>
-
-        <!-- QUICK CHANNEL DRAWER (Translucent lateral menu over live video) -->
-        <div id="quick-channels-drawer" class="quick-drawer hidden">
-            <div class="drawer-header">
-                <div class="drawer-title">
-                    <span class="brand-icon">⚡</span>
-                    <h3>Guía Rápida de Canales</h3>
-                </div>
-                <span id="drawer-count" class="drawer-count">0</span>
-            </div>
-            <div id="drawer-channels-list" class="drawer-list">
-                <!-- Dynamically injected channel items -->
-            </div>
+    <!-- ERROR NOTIFICATION -->
+    <div id="player-error" class="player-error hidden">
+        <div class="error-badge">
+            <span class="error-icon">⚠️</span>
+            <span id="player-error-text">Canal no disponible temporalmente</span>
         </div>
     </div>
 
-    <!-- TV LOGIN OVERLAY (ONLY QR CODE - SCAN WITH MOBILE TO LOG IN VIA GITHUB PAGES) -->
-    <div id="tv-login-overlay" class="tv-login-overlay hidden">
-        <div class="tv-login-modal">
-            
-            <div class="tv-login-brand">
-                <span class="brand-icon">⚡</span>
-                <h2>M3U<span class="brand-highlight">TV</span> PRO</h2>
+    <!-- MAIN SINGLE-SCREEN TV OVERLAY (MATCHING USER SCREENSHOT) -->
+    <div id="tv-main-overlay" class="tv-main-overlay">
+        <!-- Dark gradient vignette over left side for crystal clear text readability while menu is visible -->
+        <div class="video-vignette-overlay"></div>
+
+        <!-- TOP RIGHT: LIVE CHANNEL WATERMARK (LOGO ONLY) -->
+        <div id="channel-watermark" class="channel-watermark">
+            <img id="watermark-logo" src="" alt="" class="watermark-img hidden">
+        </div>
+
+        <!-- LEFT SIDE: VERTICAL CHANNEL NAVIGATOR & EPG CARDS ROW -->
+        <div class="tv-live-interface">
+
+            <!-- VERTICAL CHANNEL STRIP (1, 2, 3, 4, 5..., WITH ACTIVE PINK CARD) -->
+            <div id="vertical-channels-bar" class="vertical-channels-bar">
+                <div id="channels-scroll-list" class="channels-scroll-list">
+                    <!-- Injected dynamically:
+                    <div class="channel-nav-item">
+                        <span class="ch-num">1</span>
+                        <div class="ch-logo-wrap"><img ...></div>
+                    </div>
+                    ...
+                    -->
+                </div>
             </div>
-            <p class="tv-login-tagline">Vinculación rápida desde tu celular con correo y contraseña</p>
 
-            <div class="qr-main-card">
-                <div class="qr-stage-wrapper">
-                    <div class="card-badge">✨ ACCESO RÁPIDO CON CÓDIGO QR</div>
-                    <h3>Escanea con la cámara de tu teléfono</h3>
-                    <p class="qr-instructions">
-                        Apunta tu celular a la pantalla para abrir la página web de GitHub Pages y acceder con tu cuenta:
-                    </p>
-
-                    <!-- DYNAMIC QR BOX (Rendered via local qrcode.min.js) -->
-                    <div class="qr-box-outer">
-                        <div id="tv-qr-box" class="qr-box">
-                            <div class="qr-loading">Generando código seguro...</div>
+            <!-- EPG PROGRAM PREVIEW CARDS (FLOATING RIGHT NEXT TO ACTIVE CHANNEL) -->
+            <div id="epg-cards-container" class="epg-cards-container">
+                
+                <!-- CARD 1: EN VIVO -->
+                <div class="epg-card epg-card-live" id="epg-card-current">
+                    <div class="epg-card-bg" id="epg-bg-current"></div>
+                    <div class="epg-card-overlay"></div>
+                    <div class="epg-card-header">
+                        <span class="badge-live">En vivo</span>
+                        <span class="badge-time-left" id="epg-time-left">Quedan 43 min</span>
+                    </div>
+                    <div class="epg-card-footer">
+                        <h3 class="epg-title" id="epg-title-current">Programa En Vivo</h3>
+                        <p class="epg-subtitle" id="epg-sub-current">Transmisión en directo</p>
+                        <div class="epg-progress-bar">
+                            <div class="epg-progress-fill" id="epg-progress-fill" style="width: 55%;"></div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- PAIR CODE & GITHUB PAGES URL -->
-                    <div class="pair-code-display-box">
-                        <span class="pair-code-label">O ingresa este código en la web:</span>
-                        <span id="tv-pair-code" class="pair-code-digits">------</span>
+                <!-- CARD 2: PRÓXIMO PROGRAMA -->
+                <div class="epg-card epg-card-next" id="epg-card-next">
+                    <div class="epg-card-bg" id="epg-bg-next"></div>
+                    <div class="epg-card-overlay"></div>
+                    <div class="epg-card-header">
+                        <span class="badge-upcoming" id="epg-upcoming-time">Comienza a las 13:00</span>
                     </div>
-
-                    <div class="github-pages-url-notice">
-                        <span>Página Web Oficial:</span>
-                        <strong id="tv-pair-url-text">https://bersek3.github.io/M3UPLAYER/pair.html</strong>
-                    </div>
-
-                    <div class="pair-status-indicator">
-                        <span class="pulse-dot"></span>
-                        <span id="tv-pair-status">Esperando confirmación en tu teléfono móvil...</span>
+                    <div class="epg-card-footer">
+                        <h3 class="epg-title" id="epg-title-next">Próximo Programa</h3>
+                        <p class="epg-subtitle" id="epg-sub-next">A continuación</p>
                     </div>
                 </div>
 
-                <!-- TV REMOTE ACTIONS FOR QR SCREEN -->
-                <div class="qr-screen-actions">
-                    <button id="btn-qr-refresh" class="btn-qr-action primary">
-                        <span>🔄 Generar Nuevo Código (OK)</span>
-                    </button>
-                    <button id="btn-qr-skip" class="btn-qr-action secondary">
-                        <span>▶ Continuar con Canales Demo / Libres</span>
-                    </button>
-                    <button id="btn-qr-settings" class="btn-qr-action subtle">
-                        <span>⚙️ Ajustes Manuales (PIN 1234)</span>
-                    </button>
-                </div>
             </div>
 
         </div>
+
+        <!-- BOTTOM RIGHT: REAL-TIME DIGITAL CLOCK -->
+        <div class="bottom-brand-clock">
+            <span id="tv-clock" class="tv-clock">12:17</span>
+        </div>
+
     </div>
 
-    <!-- SETTINGS & PLAYLIST MANAGEMENT MODAL (PIN PROTECTED: 1234) -->
-    <div id="admin-modal" class="modal-backdrop hidden">
-        <div class="admin-modal-card">
+    <!-- SAMSUNG SMART TV NATIVE EXIT DIALOG -->
+    <div id="tv-exit-dialog" class="tv-modal-backdrop hidden">
+        <div class="tv-exit-card">
+            <div class="exit-icon-wrap">
+                <span class="exit-tv-icon">📺</span>
+            </div>
+            <h2 class="exit-title">¿Deseas salir de la aplicación?</h2>
+            <p class="exit-desc">Presiona para volver a los canales de la televisión o continuar viendo tu señal.</p>
             
-            <div class="modal-header">
-                <div class="modal-title-wrap">
-                    <span class="modal-icon">⚙️</span>
-                    <h3>Configuración de Listas y Canales</h3>
-                </div>
-                <button id="btn-close-modal" class="btn-close" title="Cerrar">&times;</button>
+            <div class="exit-buttons-row">
+                <button id="btn-exit-cancel" class="btn-tv-exit btn-cancel active" data-index="0">
+                    <span>Continuar viendo</span>
+                </button>
+                <button id="btn-exit-confirm" class="btn-tv-exit btn-confirm" data-index="1">
+                    <span>Salir de la App</span>
+                </button>
             </div>
-
-            <!-- STEP 1: PIN AUTHENTICATION -->
-            <div id="admin-pin-view" class="modal-body">
-                <p class="pin-instruction">Ingresa el PIN de Administrador (por defecto: <strong>1234</strong>):</p>
-                <div class="pin-input-wrap">
-                    <input type="password" id="admin-pin-input" maxlength="4" placeholder="••••" autocomplete="off">
-                    <button id="btn-submit-pin" class="btn-primary">Ingresar</button>
-                </div>
-                <p id="pin-error-msg" class="error-text hidden">PIN Incorrecto. Intenta con 1234.</p>
+            <div class="exit-hints">
+                <span>[◄ ►] Seleccionar</span>
+                <span>[OK] Confirmar</span>
+                <span>[ATRÁS] Volver</span>
             </div>
-
-            <!-- STEP 2: CONFIGURATION VIEW -->
-            <div id="admin-panel-view" class="modal-body hidden">
-                <div class="admin-status-box">
-                    <div class="status-row">
-                        <span>Lista Actual:</span>
-                        <strong id="status-loaded-text" class="text-success">Cargando...</strong>
-                    </div>
-                    <div class="status-row">
-                        <span>Total de Canales:</span>
-                        <strong id="status-channel-count">0</strong>
-                    </div>
-                    <div class="status-row">
-                        <span>Usuario Conectado:</span>
-                        <strong id="status-user-text">Sin cuenta</strong>
-                    </div>
-                </div>
-
-                <!-- TABS: URL M3U8 vs ARCHIVO LOCAL -->
-                <div class="admin-tabs">
-                    <button id="tab-btn-url" class="admin-tab-btn active">🌐 Link Remoto M3U / M3U8</button>
-                    <button id="tab-btn-file" class="admin-tab-btn">📁 Archivo Local (.m3u8)</button>
-                </div>
-
-                <!-- PANEL 1: REMOTE URL -->
-                <div id="admin-tab-url" class="admin-tab-content">
-                    <div class="form-group">
-                        <label for="m3u-url-input">URL de la Lista o Canal M3U8:</label>
-                        <input type="text" id="m3u-url-input" placeholder="https://ejemplo.com/lista.m3u8 o stream.m3u8" autocomplete="off">
-                        <small class="help-text">Compatible con listas IPTV (.m3u) y enlaces directos de transmisión HLS (.m3u8).</small>
-                    </div>
-                    <button id="btn-save-m3u" class="btn-primary">
-                        <span>💾 Guardar y Cargar Lista M3U8</span>
-                    </button>
-                </div>
-
-                <!-- PANEL 2: LOCAL FILE -->
-                <div id="admin-tab-file" class="admin-tab-content hidden">
-                    <div class="form-group">
-                        <label>Subir archivo .m3u o .m3u8:</label>
-                        <input type="file" id="m3u-file-input" accept=".m3u,.m3u8,.txt" style="display: none;">
-                        <button id="btn-trigger-file" type="button" class="btn-file-upload">
-                            <span>📁 Seleccionar Archivo .m3u / .m3u8</span>
-                        </button>
-                        <span id="selected-file-label" class="file-name-label">Ningún archivo cargado</span>
-                    </div>
-                    <button id="btn-load-file" class="btn-primary" disabled>
-                        <span>📥 Procesar y Guardar</span>
-                    </button>
-                </div>
-
-                <!-- CLOUD SYNC & SETTINGS ACTIONS -->
-                <div class="form-actions-grid">
-                    <button id="btn-sync-cloud" class="btn-action-primary">
-                        <span>🔄 Sincronizar Canales</span>
-                    </button>
-                    <button id="btn-open-qr-from-modal" class="btn-action-primary" style="border-color: #8b5cf6; color: #c4b5fd;">
-                        <span>📱 Vincular con QR</span>
-                    </button>
-                    <button id="btn-load-demo" class="btn-action-secondary">
-                        <span>📺 Restaurar Canales Demo</span>
-                    </button>
-                    <button id="btn-tv-logout" class="btn-danger hidden">
-                        <span>🚪 Cerrar Sesión</span>
-                    </button>
-                </div>
-            </div>
-
         </div>
     </div>
 
     <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="toast hidden">Mensaje</div>
+    <div id="toast" class="tv-toast hidden"></div>
 
-    <script src="main.js?v=3.0.0"></script>
+    <script src="main.js?v=4.0.4"></script>
 </body>
 </html>
