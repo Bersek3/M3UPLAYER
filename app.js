@@ -69,14 +69,21 @@ function initNavbar() {
     document.getElementById('nav-btn-profile').addEventListener('click', () => switchView('profile'));
     document.getElementById('nav-btn-live').addEventListener('click', () => launchTvLiveMode());
 
-    document.getElementById('btn-hero-watch-live').addEventListener('click', () => launchTvLiveMode());
-    document.getElementById('btn-hero-profile-cta').addEventListener('click', () => {
-        if (currentUserToken) {
-            switchView('profile');
-        } else {
-            openAuthModal('login');
-        }
-    });
+    const heroProfileBtn = document.getElementById('btn-hero-profile-cta');
+    if (heroProfileBtn) {
+        heroProfileBtn.addEventListener('click', () => {
+            if (currentUserToken) {
+                switchView('profile');
+            } else {
+                openAuthModal('login');
+            }
+        });
+    }
+
+    const heroRegBtn = document.getElementById('btn-hero-register-cta');
+    if (heroRegBtn) {
+        heroRegBtn.addEventListener('click', () => openAuthModal('register'));
+    }
 
     document.getElementById('btn-profile-launch-live').addEventListener('click', () => launchTvLiveMode());
 }
@@ -231,11 +238,13 @@ function setAuthState(isLoggedIn, username = '') {
     const guestActions = document.getElementById('nav-guest-actions');
     const userPill = document.getElementById('nav-user-pill');
     const navProfileBtn = document.getElementById('nav-btn-profile');
+    const navLiveBtn = document.getElementById('nav-btn-live');
 
     if (isLoggedIn) {
         guestActions.classList.add('hidden');
         userPill.classList.remove('hidden');
         navProfileBtn.classList.remove('hidden');
+        if (navLiveBtn) navLiveBtn.classList.remove('hidden');
 
         document.getElementById('nav-user-name').textContent = username;
         document.getElementById('nav-user-avatar').textContent = (username[0] || 'U').toUpperCase();
@@ -247,6 +256,7 @@ function setAuthState(isLoggedIn, username = '') {
         guestActions.classList.remove('hidden');
         userPill.classList.add('hidden');
         navProfileBtn.classList.add('hidden');
+        if (navLiveBtn) navLiveBtn.classList.add('hidden');
     }
 }
 
