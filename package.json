@@ -1,7 +1,7 @@
 {
   "name": "m3uplayer-cloud",
-  "version": "1.4.0",
-  "description": "M3U Player Pro for Samsung Smart TV with Cloud Portal & Mobile QR Pairing",
+  "version": "1.5.0",
+  "description": "M3U Player Pro for Samsung Smart TV with Cloud Portal & Mobile QR Pairing — Vercel + MongoDB Atlas",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",

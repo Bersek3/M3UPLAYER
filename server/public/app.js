@@ -3,7 +3,13 @@
  * Navbar, Profile (My Channels Only), and Live TV Mode (Samsung Smart TV Style)
  */
 
-const API_BASE = (window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app') || window.location.protocol === 'file:') ? 'https://m3uplayer-yw7z.onrender.com' : '';
+// API_BASE: 
+// - En Vercel: usa rutas relativas /api (mismo servidor, mismo dominio — sin CORS)
+// - En GitHub Pages o archivo local: apunta al dominio de Vercel donde están las funciones serverless
+const VERCEL_DOMAIN = 'https://m3u-player-one.vercel.app';
+const API_BASE = (window.location.hostname.includes('github.io') || window.location.protocol === 'file:')
+    ? VERCEL_DOMAIN
+    : ''; // En Vercel (vercel.app) o localhost: rutas relativas /api
 
 // State
 let currentUserToken = localStorage.getItem('m3u_web_token');
