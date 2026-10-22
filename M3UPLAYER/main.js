@@ -27,7 +27,7 @@ const STORAGE_KEY_LAST_CHANNEL = "m3u_last_played_index";
 const STORAGE_KEY_LAST_CHANNEL_URL = "m3u_last_played_url";
 const STORAGE_KEY_CACHED_CHANNELS = "m3u_cached_channels";
 
-const DEFAULT_SERVER_URL = "https://m3uplayer-yw7z.onrender.com";
+const DEFAULT_SERVER_URL = "https://m3u-player-one.vercel.app";
 
 function getServerUrl() {
     if (typeof window !== 'undefined' && window.location && window.location.origin) {
