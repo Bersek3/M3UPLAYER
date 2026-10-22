@@ -344,7 +344,7 @@ async function loadChannelsAndBoot() {
     }
 
     // Play the channel immediately!
-    selectAndPlayChannel(savedIndex, false);
+    selectAndPlayChannel(savedIndex, true);
 }
 
 // ==========================================================================
