@@ -1,3 +1,4 @@
+const { checkStreams } = require('../api/_lib/check-streams');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -556,18 +557,24 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
         }
 
         console.log(`Downloading remote M3U for user ${req.user.username}: ${url}`);
-        const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (SmartTV; Tizen)' } });
+        const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'Mozilla/5.0 (SmartTV; Tizen)' } });
         if (!response.ok) {
             return res.status(400).json({ error: `No se pudo descargar la lista. Servidor respondió con código ${response.status}` });
         }
 
         const text = await response.text();
         const playlistName = name || 'Lista Web ' + (new Date().toLocaleDateString());
-        const parsedChannels = parseM3UContent(text, url, playlistName);
+        let parsedChannels = parseM3UContent(text, url, playlistName);
 
         if (parsedChannels.length === 0) {
             return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U o M3U8' });
         }
+
+        const checked = await checkStreams(parsedChannels);
+        if (!checked.channels.length) {
+            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
+        }
+        parsedChannels = checked.channels;
 
         const playlistDoc = {
             userId: req.user.userId,
@@ -577,6 +584,8 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
             sourceUrl: url,
             channelCount: parsedChannels.length,
             channels: parsedChannels,
+            excludedChannels: checked.excludedChannels,
+            verification: checked.verification,
             updatedAt: new Date()
         };
 
@@ -586,6 +595,7 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
             success: true,
             message: `¡Lista guardada con éxito! Se cargaron ${parsedChannels.length} canal(es).`,
             playlistId: result.insertedId,
+            verification: checked.verification,
             channelCount: parsedChannels.length
         });
     } catch (err) {
@@ -597,26 +607,34 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
 // Upload Local M3U File
 app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), async (req, res) => {
     try {
-        if (!req.file) {
+        if (!req.file && !req.body.content) {
             return res.status(400).json({ error: 'No se ha seleccionado ningún archivo' });
         }
 
-        const rawText = req.file.buffer.toString('utf-8');
-        const playlistName = req.body.name || req.file.originalname || 'Lista Subida';
-        const parsedChannels = parseM3UContent(rawText, '', playlistName);
+        const rawText = req.file ? req.file.buffer.toString('utf-8') : req.body.content;
+        const playlistName = req.body.name || req.file?.originalname || req.body.filename || 'Lista Subida';
+        let parsedChannels = parseM3UContent(rawText, '', playlistName);
 
         if (parsedChannels.length === 0) {
             return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U o M3U8' });
         }
+
+        const checked = await checkStreams(parsedChannels);
+        if (!checked.channels.length) {
+            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
+        }
+        parsedChannels = checked.channels;
 
         const playlistDoc = {
             userId: req.user.userId,
             username: req.user.username,
             name: playlistName,
             type: 'file',
-            fileName: req.file.originalname,
+            fileName: req.file?.originalname || req.body.filename || 'archivo.m3u',
             channelCount: parsedChannels.length,
             channels: parsedChannels,
+            excludedChannels: checked.excludedChannels,
+            verification: checked.verification,
             updatedAt: new Date()
         };
 
@@ -626,6 +644,7 @@ app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), as
             success: true,
             message: `¡Archivo procesado con éxito! Se importaron ${parsedChannels.length} canales.`,
             playlistId: result.insertedId,
+            verification: checked.verification,
             channelCount: parsedChannels.length
         });
     } catch (err) {

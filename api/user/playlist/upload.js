@@ -1,3 +1,4 @@
+const { checkStreams } = require('../../_lib/check-streams');
 // api/user/playlist/upload.js — POST /api/user/playlist/upload (multipart/form-data)
 const { connectDB } = require('../../_lib/db');
 const { authenticate } = require('../../_lib/auth');
@@ -37,11 +38,17 @@ module.exports = async function handler(req, res) {
         }
 
         const playlistName = name || filename || 'Lista Subida';
-        const parsedChannels = parseM3UContent(content, '', playlistName);
+        let parsedChannels = parseM3UContent(content, '', playlistName);
 
         if (parsedChannels.length === 0) {
             return res.status(400).json({ error: 'El archivo no contiene canales válidos en formato M3U' });
         }
+
+        const checked = await checkStreams(parsedChannels);
+        if (!checked.channels.length) {
+            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
+        }
+        parsedChannels = checked.channels;
 
         const db = await connectDB();
         const result = await db.collection('playlists').insertOne({
@@ -52,6 +59,8 @@ module.exports = async function handler(req, res) {
             fileName: filename || 'archivo.m3u',
             channelCount: parsedChannels.length,
             channels: parsedChannels,
+            excludedChannels: checked.excludedChannels,
+            verification: checked.verification,
             updatedAt: new Date()
         });
 
@@ -59,6 +68,7 @@ module.exports = async function handler(req, res) {
             success: true,
             message: `Archivo procesado con ${parsedChannels.length} canales.`,
             playlistId: result.insertedId,
+            verification: checked.verification,
             channelsCount: parsedChannels.length
         });
     } catch (err) {

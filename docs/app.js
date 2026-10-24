@@ -351,7 +351,7 @@ function initProfileView() {
         const submitBtn = document.getElementById('btn-submit-url');
 
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span>Descargando y procesando...</span>';
+        submitBtn.innerHTML = '<span>Descargando y verificando canales...</span>';
 
         try {
             const res = await fetch(`${API_BASE}/api/user/playlist/url`, {
@@ -366,7 +366,7 @@ function initProfileView() {
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar lista');
 
-            showPlaylistFeedback(`¡Éxito! Se añadieron ${data.channelsCount || 0} canales a tu cuenta.`, 'success');
+            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
             formUrl.reset();
             await loadUserData();
         } catch (err) {
@@ -384,24 +384,21 @@ function initProfileView() {
 
         const file = fileInput.files[0];
         const name = document.getElementById('input-playlist-name-file').value.trim();
-        const formData = new FormData();
-        formData.append('file', file);
-        if (name) formData.append('name', name);
 
         btnSubmitFile.disabled = true;
-        btnSubmitFile.innerHTML = '<span>Subiendo a la nube...</span>';
+        btnSubmitFile.innerHTML = '<span>Subiendo y verificando canales...</span>';
 
         try {
             const res = await fetch(`${API_BASE}/api/user/playlist/upload`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${currentUserToken}` },
-                body: formData
+                headers: { 'Authorization': `Bearer ${currentUserToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: await file.text(), name, filename: file.name })
             });
 
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar archivo');
 
-            showPlaylistFeedback(`¡Éxito! Lista subida con ${data.channelsCount || 0} canales.`, 'success');
+            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
             formFile.reset();
             fileLabel.textContent = 'Ningún archivo cargado (.m3u, .m3u8)';
             await loadUserData();
