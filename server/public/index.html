@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5.2.0">
+    <link rel="stylesheet" href="style.css?v=5.3.0">
     <script src="hls.min.js"></script>
 </head>
 <body class="theme-dark">
@@ -273,6 +273,12 @@
 
                 <!-- TOP BAR CONTROLS FOR WEB (Fullscreen, Toggle UI, Volver al Perfil) -->
                 <div class="tv-web-top-controls" id="tv-web-top-controls">
+                    <div class="tv-volume-control" role="group" aria-label="Control de audio">
+                        <button class="btn-tv-ctrl" id="btn-tv-mute" type="button" aria-label="Silenciar" aria-pressed="false">🔊</button>
+                        <label for="tv-volume">Volumen</label>
+                        <input id="tv-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Volumen">
+                        <output id="tv-volume-level" for="tv-volume">100%</output>
+                    </div>
                     <button class="btn-tv-ctrl" id="btn-tv-favorites" type="button" aria-pressed="false">☆ Ver favoritos</button>
                     <button class="btn-tv-ctrl" id="btn-tv-exit-view" title="Volver al Perfil">
                         <span>← Salir del Modo TV</span>
@@ -396,6 +402,6 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast-notify" class="toast-popup hidden"></div>
 
-    <script src="app.js?v=5.2.0"></script>
+    <script src="app.js?v=5.3.0"></script>
 </body>
 </html>

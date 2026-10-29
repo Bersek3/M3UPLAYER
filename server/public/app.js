@@ -853,8 +853,49 @@ function renderProfileChannelsGrid() {
 // ==========================================================================
 // VIEW 3: VER EN VIVO (IDENTICAL SAMSUNG SMART TV DESIGN)
 // ==========================================================================
+function initTvVolume(video) {
+    const slider = document.getElementById('tv-volume');
+    const level = document.getElementById('tv-volume-level');
+    const mute = document.getElementById('btn-tv-mute');
+    try {
+        const saved = JSON.parse(localStorage.getItem('m3u_player_audio') || 'null');
+        if (saved && typeof saved.volume === 'number' && Number.isFinite(saved.volume)) {
+            video.volume = Math.max(0, Math.min(1, saved.volume));
+            video.muted = saved.muted === true;
+        }
+    } catch { /* Use the browser's current audio settings if storage is unavailable. */ }
+    const update = () => {
+        const percent = Math.round(video.volume * 100);
+        const silent = video.muted || percent === 0;
+        slider.value = percent;
+        slider.setAttribute('aria-valuetext', `${percent}%${video.muted ? ', silenciado' : ''}`);
+        level.textContent = video.muted ? '0%' : `${percent}%`;
+        mute.textContent = silent ? '🔇' : '🔊';
+        mute.setAttribute('aria-label', silent ? 'Activar sonido' : 'Silenciar');
+        mute.setAttribute('aria-pressed', String(silent));
+        try {
+            localStorage.setItem('m3u_player_audio', JSON.stringify({ volume: video.volume, muted: video.muted }));
+        } catch { /* Audio controls remain usable without storage. */ }
+    };
+    slider.addEventListener('input', () => {
+        video.volume = Number(slider.value) / 100;
+        video.muted = video.volume === 0;
+        update();
+    });
+    mute.addEventListener('click', () => {
+        if (video.muted || video.volume === 0) {
+            if (video.volume === 0) video.volume = 0.5;
+            video.muted = false;
+        } else video.muted = true;
+        update();
+    });
+    video.addEventListener('volumechange', update);
+    update();
+}
+
 function initTvPlayer() {
     const video = document.getElementById('tv-main-video');
+    initTvVolume(video);
     const btnExit = document.getElementById('btn-tv-exit-view');
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
     const btnFullscreen = document.getElementById('btn-tv-fullscreen');
@@ -891,6 +932,7 @@ function initTvPlayer() {
     // Keyboard support like Samsung Remote Control
     window.addEventListener('keydown', (e) => {
         if (currentView !== 'live') return;
+        if (e.target.matches?.('input, select, textarea, button')) return;
 
         switch (e.key) {
             case 'ArrowUp':

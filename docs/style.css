@@ -1209,6 +1209,20 @@ html, body {
 .channel-favorite.selected { color: #facc15; border-color: #facc15; }
 .channel-favorite:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 .tv-web-top-controls { flex-wrap: wrap; }
+.tv-volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(14, 20, 32, 0.85);
+    color: #fff;
+    font-size: 12px;
+}
+.tv-volume-control input { width: 100px; accent-color: #f472b6; cursor: pointer; }
+.tv-volume-control output { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.tv-volume-control input:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
 
 .channel-nav-item .ch-logo-wrap {
     width: 48px;
