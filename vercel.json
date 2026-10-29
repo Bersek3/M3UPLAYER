@@ -1,25 +1,26 @@
 {
   "version": 2,
   "framework": null,
-  "buildCommand": "",
-  "outputDirectory": "server/public",
-  "functions": {
-    "api/**/*.js": {
-      "maxDuration": 30,
-      "memory": 512
-    }
-  },
-  "rewrites": [
-    { "source": "/", "destination": "/index.html" }
+  "builds": [
+    { "src": "api/auth/*.js", "use": "@vercel/node" },
+    { "src": "api/user/**/*.js", "use": "@vercel/node" },
+    { "src": "api/proxy/*.js", "use": "@vercel/node" },
+    { "src": "api/status.js", "use": "@vercel/node" },
+    { "src": "api/channels.js", "use": "@vercel/node" },
+    { "src": "server/public/**", "use": "@vercel/static" }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
-      ]
-    }
+      "src": "/api/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Range"
+      },
+      "continue": true
+    },
+    { "handle": "filesystem" },
+    { "src": "/", "dest": "/server/public/index.html" },
+    { "src": "/(.*)", "dest": "/server/public/$1" }
   ]
 }
