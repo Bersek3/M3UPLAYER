@@ -374,8 +374,9 @@ function initProfileView() {
                 body: JSON.stringify({ url, name })
             });
 
-            const data = await res.json();
+            let data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar lista');
+            data = await analyzeAndSavePlaylist(data, submitBtn);
 
             showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
             formUrl.reset();
@@ -406,8 +407,9 @@ function initProfileView() {
                 body: JSON.stringify({ content: await file.text(), name, filename: file.name })
             });
 
-            const data = await res.json();
+            let data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar archivo');
+            data = await analyzeAndSavePlaylist(data, btnSubmitFile);
 
             showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
             formFile.reset();
@@ -416,7 +418,7 @@ function initProfileView() {
         } catch (err) {
             showPlaylistFeedback(err.message, 'error');
         } finally {
-            btnSubmitFile.disabled = true;
+            btnSubmitFile.disabled = !fileInput.files.length;
             btnSubmitFile.innerHTML = '<span>📤 Subir Archivo y Procesar</span>';
         }
     });
@@ -428,6 +430,141 @@ let playlistFeedbackTimer;
 let toastTimer;
 let userDataRevision = 0;
 const pendingPlaylistDeletes = new Set();
+
+// A successful download is not evidence that the browser can decode video.
+function checkBrowserPlayback(channel, signal) {
+    return new Promise(resolve => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.style.cssText = 'position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+        video.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(video);
+        let player, timer, poll, finished = false;
+        let mode = window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        let firstTime = null;
+        const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
+        const finish = (playable, reason) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            clearInterval(poll);
+            signal.removeEventListener('abort', abort);
+            if (player) player.destroy();
+            video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            video.remove();
+            resolve({ candidateId: channel.candidateId, playable, playbackMode: mode, reason });
+        };
+        const abort = () => finish(false, 'Análisis cancelado');
+        function retry(reason) {
+            if (finished) return;
+            if (mode === 'direct') {
+                mode = 'proxy';
+                safeStart();
+            } else finish(false, reason);
+        }
+        function safeStart() {
+            try { start(); }
+            catch (error) { finish(false, error.message || 'No se pudo iniciar el reproductor'); }
+        }
+        function start() {
+            clearTimeout(timer);
+            if (player) { player.destroy(); player = null; }
+            video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            firstTime = null;
+            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                player = new Hls({ enableWorker: true, maxBufferLength: 4, maxMaxBufferLength: 8, backBufferLength: 0,
+                    xhrSetup: (xhr, url) => {
+                        if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
+                            xhr.open('GET', proxyUrl(url), true);
+                        }
+                    }
+                });
+                const attempt = player;
+                player.on(Hls.Events.MANIFEST_PARSED, () => {
+                    if (player === attempt) video.play().catch(() => finish(false, 'El navegador no permitió iniciar el video'));
+                });
+                player.on(Hls.Events.ERROR, (_event, data) => {
+                    if (player !== attempt || !data.fatal) return;
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) retry('No se pudo acceder a la señal');
+                    else finish(false, 'El navegador no pudo decodificar el video');
+                });
+                player.loadSource(mode === 'proxy' ? proxyUrl(channel.url) : channel.url);
+                player.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.onerror = () => retry('Video incompatible o inaccesible');
+                video.src = mode === 'proxy' ? proxyUrl(channel.url) : channel.url;
+                video.play().catch(() => finish(false, 'El navegador no permitió iniciar el video'));
+            } else finish(false, 'Este navegador no admite HLS');
+        }
+        poll = setInterval(() => {
+            if (video.readyState < 2 || video.videoWidth <= 0 || video.paused || video.seeking) return;
+            const frames = video.getVideoPlaybackQuality?.().totalVideoFrames;
+            if (typeof frames === 'number' && frames < 2) return;
+            if (firstTime === null) firstTime = video.currentTime;
+            if (video.currentTime - firstTime >= 1) finish(true);
+        }, 200);
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+        else safeStart();
+    });
+}
+
+async function analyzeAndSavePlaylist(preview, button) {
+    if (!preview.requiresPlaybackCheck || !Array.isArray(preview.channels)) {
+        throw new Error('El servidor debe actualizarse para comprobar la reproducción antes de guardar.');
+    }
+    const token = currentUserToken;
+    const controller = new AbortController();
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn-submit-action';
+    cancel.textContent = 'Cancelar análisis';
+    cancel.onclick = () => controller.abort();
+    button.after(cancel);
+    const results = [];
+    let cursor = 0, completed = 0, playable = 0;
+    const progress = () => {
+        button.textContent = `Analizando ${completed}/${preview.channels.length} · ${playable} con video`;
+    };
+    progress();
+    try {
+        async function worker() {
+            while (cursor < preview.channels.length && !controller.signal.aborted) {
+                const channel = preview.channels[cursor++];
+                const result = await checkBrowserPlayback(channel, controller.signal);
+                results.push(result);
+                completed++;
+                if (result.playable) playable++;
+                progress();
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(2, preview.channels.length) }, worker));
+        if (controller.signal.aborted) throw new Error('Análisis cancelado. No se guardó la lista.');
+        if (token !== currentUserToken) throw new Error('La sesión cambió. Vuelve a cargar la lista.');
+        if (!playable) throw new Error('Ningún canal mostró video en este navegador. No se guardó la lista.');
+        button.textContent = `Guardando ${playable} canales comprobados…`;
+        cancel.disabled = true;
+        const response = await fetch(`${API_BASE}/api/user/playlist/confirm`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ importId: preview.importId, results })
+        });
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || 'No se pudo guardar la lista comprobada');
+        return data;
+    } finally {
+        controller.abort();
+        cancel.remove();
+    }
+}
 
 function showPlaylistFeedback(msg, type) {
     const box = document.getElementById('playlist-action-feedback');
@@ -847,7 +984,7 @@ function playTvChannel(index) {
     }
 
     const streamUrl = channel.url;
-    let usingProxy = window.location.protocol === 'https:' && /^http:/i.test(streamUrl);
+    let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
     let recoveredMedia = false;
     const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
     video.pause();

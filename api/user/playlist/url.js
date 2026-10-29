@@ -1,4 +1,4 @@
-const { checkStreams } = require('../../_lib/check-streams');
+const { prepareImport } = require('../../_lib/playlist-import');
 // api/user/playlist/url.js — POST /api/user/playlist/url
 const { connectDB } = require('../../_lib/db');
 const { authenticate } = require('../../_lib/auth');
@@ -47,33 +47,10 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'La URL no contiene canales válidos en formato M3U' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
-        parsedChannels = checked.channels;
-
         const db = await connectDB();
-        const result = await db.collection('playlists').insertOne({
-            userId: auth.user.userId,
-            username: auth.user.username,
-            name: playlistName,
-            type: 'url',
-            sourceUrl: url,
-            channelCount: parsedChannels.length,
-            channels: parsedChannels,
-            excludedChannels: checked.excludedChannels,
-            verification: checked.verification,
-            updatedAt: new Date()
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: `Lista guardada con ${parsedChannels.length} canal(es).`,
-            playlistId: result.insertedId,
-            verification: checked.verification,
-            channelsCount: parsedChannels.length
-        });
+        return res.status(200).json(await prepareImport(db, auth.user, {
+            name: playlistName, type: 'url', sourceUrl: url, channels: parsedChannels
+        }));
     } catch (err) {
         console.error('Add URL error:', err);
         return res.status(500).json({ error: 'Error al procesar la lista: ' + err.message });

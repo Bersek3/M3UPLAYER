@@ -1,4 +1,4 @@
-const { checkStreams } = require('../api/_lib/check-streams');
+const { prepareImport, confirmImport } = require('../api/_lib/playlist-import');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -578,34 +578,9 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
-        parsedChannels = checked.channels;
-
-        const playlistDoc = {
-            userId: req.user.userId,
-            username: req.user.username,
-            name: playlistName,
-            type: 'url',
-            sourceUrl: url,
-            channelCount: parsedChannels.length,
-            channels: parsedChannels,
-            excludedChannels: checked.excludedChannels,
-            verification: checked.verification,
-            updatedAt: new Date()
-        };
-
-        const result = await playlistsCol.insertOne(playlistDoc);
-
-        res.json({
-            success: true,
-            message: `¡Lista guardada con éxito! Se cargaron ${parsedChannels.length} canal(es).`,
-            playlistId: result.insertedId,
-            verification: checked.verification,
-            channelCount: parsedChannels.length
-        });
+        res.json(await prepareImport(db, req.user, {
+            name: playlistName, type: 'url', sourceUrl: url, channels: parsedChannels
+        }));
     } catch (err) {
         console.error('Add M3U URL error:', err);
         res.status(500).json({ error: 'Error al descargar o procesar la lista M3U: ' + err.message });
@@ -627,37 +602,20 @@ app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), as
             return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
-        parsedChannels = checked.channels;
-
-        const playlistDoc = {
-            userId: req.user.userId,
-            username: req.user.username,
-            name: playlistName,
-            type: 'file',
-            fileName: req.file?.originalname || req.body.filename || 'archivo.m3u',
-            channelCount: parsedChannels.length,
-            channels: parsedChannels,
-            excludedChannels: checked.excludedChannels,
-            verification: checked.verification,
-            updatedAt: new Date()
-        };
-
-        const result = await playlistsCol.insertOne(playlistDoc);
-
-        res.json({
-            success: true,
-            message: `¡Archivo procesado con éxito! Se importaron ${parsedChannels.length} canales.`,
-            playlistId: result.insertedId,
-            verification: checked.verification,
-            channelCount: parsedChannels.length
-        });
+        res.json(await prepareImport(db, req.user, {
+            name: playlistName, type: 'file', fileName: req.file?.originalname || req.body.filename || 'archivo.m3u', channels: parsedChannels
+        }));
     } catch (err) {
         console.error('Upload M3U error:', err);
         res.status(500).json({ error: 'Error al procesar el archivo subido: ' + err.message });
+    }
+});
+
+app.post('/api/user/playlist/confirm', authenticate, async (req, res) => {
+    try {
+        res.json(await confirmImport(db, req.user, req.body));
+    } catch (error) {
+        res.status(422).json({ error: error.message });
     }
 });
 
