@@ -413,36 +413,52 @@ function initProfileView() {
     document.getElementById('btn-refresh-playlists').addEventListener('click', () => loadUserData());
 }
 
+let playlistFeedbackTimer;
+let toastTimer;
+let userDataRevision = 0;
+const pendingPlaylistDeletes = new Set();
+
 function showPlaylistFeedback(msg, type) {
     const box = document.getElementById('playlist-action-feedback');
+    clearTimeout(playlistFeedbackTimer);
+    box.setAttribute('role', type === 'error' ? 'alert' : 'status');
     box.textContent = msg;
     box.className = `action-feedback ${type === 'success' ? 'alert-success' : 'alert-error'}`;
     box.classList.remove('hidden');
-    setTimeout(() => box.classList.add('hidden'), 5000);
+    playlistFeedbackTimer = setTimeout(() => box.classList.add('hidden'), 7000);
 }
 
 // Load playlists & channels for the authenticated user
 async function loadUserData() {
     if (!currentUserToken) return;
+    const revision = ++userDataRevision;
 
     try {
         // 1. Fetch user playlists
         const plRes = await fetch(`${API_BASE}/api/user/playlists`, {
+            cache: 'no-store',
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
+        if (revision !== userDataRevision) return;
+        if (!plRes.ok) throw new Error('No se pudieron actualizar las listas. Intenta nuevamente.');
         if (plRes.ok) {
             const plData = await plRes.json();
-            userPlaylists = plData.playlists || [];
+            if (revision !== userDataRevision) return;
+            userPlaylists = (plData.playlists || []).filter(pl => !pendingPlaylistDeletes.has(String(pl.id || pl._id)));
             renderUserPlaylists(userPlaylists);
         }
 
         // 2. Fetch user channels
         const chRes = await fetch(`${API_BASE}/api/user/channels`, {
+            cache: 'no-store',
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
 
+        if (revision !== userDataRevision) return;
+        if (!chRes.ok) throw new Error('No se pudieron actualizar los canales. Intenta nuevamente.');
         if (chRes.ok) {
             const chData = await chRes.json();
+            if (revision !== userDataRevision) return;
             allUserChannels = chData.channels || [];
             
             // If user has 0 channels uploaded yet, load public/default channels so they can see channels immediately
@@ -457,6 +473,7 @@ async function loadUserData() {
             }
         }
 
+        if (revision !== userDataRevision) return;
         // Update counters
         document.getElementById('profile-total-channels-badge').textContent = allUserChannels.length;
         document.getElementById('profile-total-playlists-badge').textContent = userPlaylists.length;
@@ -468,12 +485,14 @@ async function loadUserData() {
 
     } catch (err) {
         console.error('Error cargando datos de usuario:', err);
+        if (revision === userDataRevision) showPlaylistFeedback(err.message, 'error');
     }
 }
 
 function renderUserPlaylists(playlists) {
     const container = document.getElementById('profile-playlists-list');
     container.innerHTML = '';
+    document.getElementById('profile-total-playlists-badge').textContent = playlists?.length || 0;
 
     if (!playlists || playlists.length === 0) {
         container.innerHTML = '<p class="dropzone-hint" style="text-align:center; padding: 20px;">No tienes listas guardadas aún.</p>';
@@ -492,18 +511,38 @@ function renderUserPlaylists(playlists) {
         `;
 
         item.querySelector('.btn-delete-pl').addEventListener('click', async () => {
+            const id = String(pl.id || pl._id);
+            if (pendingPlaylistDeletes.has(id)) return;
             if (!confirm(`¿Eliminar la lista "${pl.name}"?`)) return;
+            pendingPlaylistDeletes.add(id);
+            ++userDataRevision;
+            const index = userPlaylists.findIndex(entry => String(entry.id || entry._id) === id);
+            userPlaylists = userPlaylists.filter(entry => String(entry.id || entry._id) !== id);
+            renderUserPlaylists(userPlaylists);
+            showPlaylistFeedback('Eliminando lista…', 'success');
             try {
-                const res = await fetch(`${API_BASE}/api/user/playlist/${pl.id || pl._id}`, {
+                const res = await fetch(`${API_BASE}/api/user/playlist/${encodeURIComponent(id)}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${currentUserToken}` }
                 });
-                if (res.ok) {
-                    showToast('Lista eliminada correctamente');
-                    loadUserData();
-                }
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) throw new Error(data.error || 'No se pudo eliminar la lista. Intenta nuevamente.');
+                ++userDataRevision;
+                userPlaylists = userPlaylists.filter(entry => String(entry.id || entry._id) !== id);
+                renderUserPlaylists(userPlaylists);
+                showPlaylistFeedback('Lista eliminada correctamente.', 'success');
+                showToast('Lista eliminada correctamente');
             } catch (e) {
-                alert('Error al eliminar');
+                ++userDataRevision;
+                if (!userPlaylists.some(entry => String(entry.id || entry._id) === id)) {
+                    userPlaylists.splice(Math.max(0, index), 0, pl);
+                }
+                renderUserPlaylists(userPlaylists);
+                showPlaylistFeedback(`${e.message} La lista se ha restaurado en pantalla.`, 'error');
+                showToast('No se pudo eliminar la lista');
+            } finally {
+                pendingPlaylistDeletes.delete(id);
+                if (pendingPlaylistDeletes.size === 0) await loadUserData();
             }
         });
 
@@ -924,9 +963,11 @@ function initClock() {
 // Utilities
 function showToast(msg) {
     const toast = document.getElementById('toast-notify');
+    clearTimeout(toastTimer);
+    toast.setAttribute('role', 'status');
     toast.textContent = msg;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 3500);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
 function escapeHtml(str) {
