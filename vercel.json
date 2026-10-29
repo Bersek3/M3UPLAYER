@@ -2,11 +2,7 @@
   "version": 2,
   "framework": null,
   "builds": [
-    { "src": "api/auth/*.js", "use": "@vercel/node" },
-    { "src": "api/user/**/*.js", "use": "@vercel/node" },
-    { "src": "api/proxy/*.js", "use": "@vercel/node" },
-    { "src": "api/status.js", "use": "@vercel/node" },
-    { "src": "api/channels.js", "use": "@vercel/node" },
+    { "src": "api/index.js", "use": "@vercel/node" },
     { "src": "server/public/**", "use": "@vercel/static" }
   ],
   "routes": [
@@ -19,9 +15,7 @@
       },
       "continue": true
     },
-    { "src": "/api/user/playlist/(url|upload|confirm)", "dest": "/api/user/playlist/$1.js" },
-    { "src": "/api/user/playlist/([^/]+)", "dest": "/api/user/playlist/[id].js?id=$1" },
-    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "handle": "filesystem" },
     { "src": "/", "dest": "/server/public/index.html" },
     { "src": "/(.*)", "dest": "/server/public/$1" }

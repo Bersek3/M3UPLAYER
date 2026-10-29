@@ -374,7 +374,7 @@ function initProfileView() {
                 body: JSON.stringify({ url, name })
             });
 
-            let data = await res.json();
+            let data = await readApiResponse(res, 'analizar la lista por URL');
             if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar lista');
             data = await analyzeAndSavePlaylist(data, submitBtn);
 
@@ -407,7 +407,7 @@ function initProfileView() {
                 body: JSON.stringify({ content: await file.text(), name, filename: file.name })
             });
 
-            let data = await res.json();
+            let data = await readApiResponse(res, 'analizar el archivo M3U');
             if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar archivo');
             data = await analyzeAndSavePlaylist(data, btnSubmitFile);
 
@@ -557,12 +557,22 @@ async function analyzeAndSavePlaylist(preview, button) {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ importId: preview.importId, results })
         });
-        const data = await response.json();
+        const data = await readApiResponse(response, 'guardar los canales comprobados');
         if (!response.ok || data.error) throw new Error(data.error || 'No se pudo guardar la lista comprobada');
         return data;
     } finally {
         controller.abort();
         cancel.remove();
+    }
+}
+
+async function readApiResponse(response, operation) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        const path = response.url ? new URL(response.url).pathname : '/api';
+        throw new Error(`No se pudo ${operation}: el servidor respondió HTTP ${response.status} en ${path} sin datos JSON. Recarga la página después del despliegue; si persiste, revisa la configuración de la API en Vercel.`);
     }
 }
 
