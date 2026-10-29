@@ -22,6 +22,17 @@ let filteredChannels = [];
 let activeProfileCategory = 'ALL';
 let userPlaylists = [];
 
+// Avoid repeatedly requesting broken logos during view changes.
+const failedLogoUrls = new Set();
+function usableLogo(url) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return '';
+    const secureUrl = url.replace(/^http:/i, 'https:');
+    return failedLogoUrls.has(secureUrl) ? '' : secureUrl;
+}
+document.addEventListener('error', event => {
+    if (event.target?.tagName === 'IMG' && event.target.src) failedLogoUrls.add(event.target.src);
+}, true);
+
 // TV Mode State
 let tvChannels = [];
 let currentTvIndex = 0;
@@ -614,8 +625,8 @@ function renderProfileChannelsGrid() {
         card.className = 'user-channel-card';
 
         let logoHtml = '';
-        if (ch.logo && ch.logo.startsWith('http')) {
-            logoHtml = `<img src="${escapeHtml(ch.logo)}" alt="" class="card-channel-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;font-size:24px;">📺</span>`;
+        if (usableLogo(ch.logo)) {
+            logoHtml = `<img src="${escapeHtml(usableLogo(ch.logo))}" alt="" class="card-channel-logo" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;font-size:24px;">📺</span>`;
         } else {
             logoHtml = `<span style="font-size:24px;">📺</span>`;
         }
@@ -762,9 +773,11 @@ function renderTvVerticalChannelsBar() {
         const logoWrap = document.createElement('div');
         logoWrap.className = 'ch-logo-wrap';
 
-        if (ch.logo && ch.logo.startsWith('http')) {
+        if (usableLogo(ch.logo)) {
             const img = document.createElement('img');
-            img.src = ch.logo;
+            img.loading = 'lazy';
+            img.referrerPolicy = 'no-referrer';
+            img.src = usableLogo(ch.logo);
             img.alt = ch.name;
             img.onerror = () => {
                 img.style.display = 'none';
@@ -834,39 +847,72 @@ function playTvChannel(index) {
     }
 
     const streamUrl = channel.url;
+    let usingProxy = window.location.protocol === 'https:' && /^http:/i.test(streamUrl);
+    let recoveredMedia = false;
+    const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.onerror = null;
 
-    if (Hls.isSupported() && (streamUrl.includes('.m3u8') || streamUrl.startsWith('http'))) {
-        tvHls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 30
-        });
-
-        tvHls.loadSource(streamUrl);
-        tvHls.attachMedia(video);
-
-        tvHls.on(Hls.Events.MANIFEST_PARSED, () => {
-            bufferBadge.classList.add('hidden');
-            video.play().catch(() => {});
-        });
-
-        tvHls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) {
-                bufferBadge.classList.add('hidden');
-                errorBadge.classList.remove('hidden');
-                document.getElementById('tv-error-text').textContent = 'Señal no disponible temporalmente';
-            }
-        });
-
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = streamUrl;
-        video.play().then(() => {
-            bufferBadge.classList.add('hidden');
-        }).catch(() => {
-            bufferBadge.classList.add('hidden');
-            errorBadge.classList.remove('hidden');
-        });
+    function fail(message) {
+        bufferBadge.classList.add('hidden');
+        errorBadge.classList.remove('hidden');
+        document.getElementById('tv-error-text').textContent = message;
+        showToast(message);
     }
+
+    function startPlayback() {
+        if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+            const player = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 30,
+                xhrSetup: (xhr, url) => {
+                    if (usingProxy) {
+                        const resolved = new URL(url, window.location.href);
+                        if (resolved.pathname !== '/api/proxy/hls') xhr.open('GET', proxyUrl(url), true);
+                    }
+                }
+            });
+            tvHls = player;
+            player.on(Hls.Events.MANIFEST_PARSED, () => {
+                if (tvHls !== player) return;
+                video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+            });
+            player.on(Hls.Events.ERROR, (_event, data) => {
+                if (tvHls !== player || !data.fatal) return;
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy) {
+                    usingProxy = true;
+                    showToast('Reintentando la señal mediante el servidor…');
+                    startPlayback();
+                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
+                    recoveredMedia = true;
+                    player.recoverMediaError();
+                } else {
+                    player.stopLoad();
+                    fail(data.type === Hls.ErrorTypes.NETWORK_ERROR
+                        ? 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.'
+                        : 'El navegador no pudo decodificar este video. Prueba abrirlo en VLC.');
+                }
+            });
+            player.loadSource(usingProxy ? proxyUrl(streamUrl) : streamUrl);
+            player.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.onerror = () => {
+                if (!usingProxy) {
+                    usingProxy = true;
+                    startPlayback();
+                } else fail('No se pudo reproducir esta señal en el navegador. Prueba abrirla en VLC.');
+            };
+            video.src = usingProxy ? proxyUrl(streamUrl) : streamUrl;
+            video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+        } else {
+            fail('Este navegador no admite la reproducción HLS. Prueba con otro navegador o VLC.');
+        }
+    }
+    startPlayback();
 
     video.onplaying = () => bufferBadge.classList.add('hidden');
     video.onwaiting = () => bufferBadge.classList.remove('hidden');
@@ -875,8 +921,9 @@ function playTvChannel(index) {
 function updateTvWatermarkAndEpg(channel) {
     // Watermark
     const watermark = document.getElementById('tv-watermark-img');
-    if (channel.logo && channel.logo.startsWith('http')) {
-        watermark.src = channel.logo;
+    if (usableLogo(channel.logo)) {
+        watermark.referrerPolicy = 'no-referrer';
+        watermark.src = usableLogo(channel.logo);
         watermark.classList.remove('hidden');
         watermark.onerror = () => watermark.classList.add('hidden');
     } else {

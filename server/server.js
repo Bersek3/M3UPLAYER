@@ -60,6 +60,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Media transport does not require a database connection.
+app.all('/api/proxy/hls', require('../api/_lib/hls-proxy').handler);
+
 // Middleware to ensure DB connection before handling API routes
 app.use(async (req, res, next) => {
     if (req.path.startsWith('/api/')) {
