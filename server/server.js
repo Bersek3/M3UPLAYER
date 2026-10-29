@@ -19,34 +19,38 @@ let client = null;
 let db = null;
 let usersCol = null;
 let playlistsCol = null;
-let isConnecting = false;
+let connectionPromise = null;
 
-// Connect to MongoDB Atlas with auto-retry, timeout protection and IPv4 forced
+// Share one connection attempt so requests arriving during startup wait for it.
 async function connectDB() {
     if (db && usersCol && playlistsCol) return true;
-    if (isConnecting) return false;
-    isConnecting = true;
-    try {
-        console.log('Connecting to MongoDB Atlas...');
-        client = new MongoClient(MONGO_URI, {
-            serverSelectionTimeoutMS: 5000,
+    if (connectionPromise) return connectionPromise;
+    connectionPromise = (async () => {
+        const candidate = new MongoClient(MONGO_URI, {
+            serverSelectionTimeoutMS: 8000,
             connectTimeoutMS: 10000,
             family: 4
         });
-        await client.connect();
-        db = client.db(DB_NAME);
-        usersCol = db.collection('users');
-        playlistsCol = db.collection('playlists');
-        console.log('Connected successfully to MongoDB Atlas (Database: ' + DB_NAME + ')');
-        isConnecting = false;
-        return true;
-    } catch (err) {
-        isConnecting = false;
-        console.error('MongoDB Atlas Connection Error:', err.message);
-        if (err.message && (err.message.includes('alert number 80') || err.message.includes('tlsv1 alert internal error'))) {
-            console.error('⚠️ ATENCIÓN: Este error (SSL alert number 80) significa que MongoDB Atlas bloqueó la IP de Render. Debes agregar 0.0.0.0/0 en MongoDB Atlas -> Network Access.');
+        try {
+            console.log('Connecting to MongoDB Atlas...');
+            await candidate.connect();
+            const connectedDb = candidate.db(DB_NAME);
+            usersCol = connectedDb.collection('users');
+            playlistsCol = connectedDb.collection('playlists');
+            db = connectedDb;
+            client = candidate;
+            console.log('Connected successfully to MongoDB Atlas');
+            return true;
+        } catch (err) {
+            console.error('MongoDB Atlas Connection Error:', err.message);
+            await candidate.close().catch(() => {});
+            return false;
         }
-        return false;
+    })();
+    try {
+        return await connectionPromise;
+    } finally {
+        connectionPromise = null;
     }
 }
 connectDB();
@@ -61,9 +65,10 @@ app.use(async (req, res, next) => {
     if (req.path.startsWith('/api/')) {
         if (!usersCol || !playlistsCol) {
             const connected = await connectDB();
-            if (!connected && !usersCol) {
+            if (!connected) {
+                res.setHeader('Retry-After', '3');
                 return res.status(503).json({
-                    error: 'La base de datos aún no está conectada. Si estás en Render, asegúrate de habilitar 0.0.0.0/0 en Network Access de MongoDB Atlas.'
+                    error: 'El servicio est? temporalmente ocupado. Intenta nuevamente en unos segundos.'
                 });
             }
         }
