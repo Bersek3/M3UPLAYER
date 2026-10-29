@@ -35,6 +35,55 @@ document.addEventListener('error', event => {
 
 // TV Mode State
 let tvChannels = [];
+let tvAllChannels = [];
+let tvFavoritesOnly = false;
+let tvPlayingChannel = null;
+
+function channelFavoriteKey(channel) {
+    return JSON.stringify([channel.playlistName || '', channel.name || channel.url]);
+}
+
+function readTvFavorites() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('m3u_favorites:' + (currentUsername || 'guest')) || '[]');
+        return new Set(Array.isArray(saved) ? saved.filter(key => typeof key === 'string') : []);
+    } catch { return new Set(); }
+}
+
+function orderedTvChannels(channels, favorites, onlyFavorites) {
+    return channels.filter(ch => !onlyFavorites || favorites.has(channelFavoriteKey(ch)))
+        .slice().sort((a, b) => Number(favorites.has(channelFavoriteKey(b))) - Number(favorites.has(channelFavoriteKey(a))) ||
+            String(a.number || '').localeCompare(String(b.number || ''), 'es', { numeric: true }) ||
+            String(a.name || '').localeCompare(String(b.name || ''), 'es'));
+}
+
+function refreshTvFavorites() {
+    const favorites = readTvFavorites();
+    if (!tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)))) tvFavoritesOnly = false;
+    tvChannels = orderedTvChannels(tvAllChannels, favorites, tvFavoritesOnly);
+    currentTvIndex = tvPlayingChannel ? tvChannels.findIndex(ch => ch.url === tvPlayingChannel.url) : 0;
+    const filter = document.getElementById('btn-tv-favorites');
+    filter.textContent = tvFavoritesOnly ? '★ Favoritos · Ver todos' : '☆ Ver favoritos';
+    filter.setAttribute('aria-pressed', String(tvFavoritesOnly));
+    renderTvVerticalChannelsBar();
+}
+
+function toggleTvFavorite(channel) {
+    const favorites = readTvFavorites();
+    const key = channelFavoriteKey(channel);
+    const removing = favorites.has(key);
+    if (removing) favorites.delete(key);
+    else favorites.add(key);
+    try {
+        localStorage.setItem('m3u_favorites:' + (currentUsername || 'guest'), JSON.stringify([...favorites]));
+    } catch {
+        showToast('No se pudo guardar el favorito. Revisa el almacenamiento del navegador.');
+        return;
+    }
+    refreshTvFavorites();
+    showToast(removing ? 'Canal quitado de favoritos' : 'Canal añadido a favoritos');
+    showTvOverlayTemporarily();
+}
 let currentTvIndex = 0;
 let tvHls = null;
 let tvOverlayTimeout = null;
@@ -820,6 +869,16 @@ function initTvPlayer() {
     });
 
     btnToggleMenu.addEventListener('click', () => toggleTvOverlay());
+    document.getElementById('btn-tv-favorites').addEventListener('click', () => {
+        const favorites = readTvFavorites();
+        if (!tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)))) {
+            showToast('Pulsa la estrella de un canal para añadirlo a favoritos');
+            return;
+        }
+        tvFavoritesOnly = !tvFavoritesOnly;
+        refreshTvFavorites();
+        showTvOverlayTemporarily();
+    });
 
     btnFullscreen.addEventListener('click', () => {
         if (!document.fullscreenElement) {
@@ -889,7 +948,11 @@ async function launchTvLiveMode(targetChannel = null) {
         }
     }
 
-    renderTvVerticalChannelsBar();
+    tvAllChannels = tvChannels.slice();
+    const favorites = readTvFavorites();
+    tvFavoritesOnly = !targetChannel && tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)));
+    tvPlayingChannel = targetChannel;
+    refreshTvFavorites();
 
     // Select channel
     if (targetChannel) {
@@ -899,6 +962,7 @@ async function launchTvLiveMode(targetChannel = null) {
         currentTvIndex = 0;
     }
 
+    renderTvVerticalChannelsBar();
     playTvChannel(currentTvIndex);
     showTvOverlayTemporarily();
 }
@@ -906,6 +970,7 @@ async function launchTvLiveMode(targetChannel = null) {
 function renderTvVerticalChannelsBar() {
     const list = document.getElementById('tv-channels-scroll-list');
     list.innerHTML = '';
+    const favorites = readTvFavorites();
 
     tvChannels.forEach((ch, idx) => {
         const item = document.createElement('div');
@@ -936,6 +1001,21 @@ function renderTvVerticalChannelsBar() {
         }
 
         item.appendChild(logoWrap);
+
+        const favorite = document.createElement('button');
+        const isFavorite = favorites.has(channelFavoriteKey(ch));
+        favorite.type = 'button';
+        favorite.className = 'channel-favorite' + (isFavorite ? ' selected' : '');
+        favorite.textContent = isFavorite ? '★' : '☆';
+        favorite.setAttribute('aria-pressed', String(isFavorite));
+        favorite.setAttribute('aria-label', `${isFavorite ? 'Quitar de' : 'Añadir a'} favoritos: ${ch.name}`);
+        favorite.addEventListener('click', event => {
+            event.stopPropagation();
+            toggleTvFavorite(ch);
+            const replacement = document.getElementById('tv-channels-scroll-list').querySelector(`[data-index="${tvChannels.findIndex(c => c.url === ch.url)}"] .channel-favorite`);
+            (replacement || document.getElementById('btn-tv-favorites')).focus();
+        });
+        item.appendChild(favorite);
 
         item.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -970,13 +1050,15 @@ function updateTvVerticalPosition() {
 
 function changeTvChannel(delta) {
     if (tvChannels.length === 0) return;
-    currentTvIndex = (currentTvIndex + delta + tvChannels.length) % tvChannels.length;
+    currentTvIndex = currentTvIndex < 0 ? (delta < 0 ? tvChannels.length - 1 : 0)
+        : (currentTvIndex + delta + tvChannels.length) % tvChannels.length;
     playTvChannel(currentTvIndex);
 }
 
 function playTvChannel(index) {
     const channel = tvChannels[index];
     if (!channel) return;
+    tvPlayingChannel = channel;
 
     updateTvVerticalPosition();
     updateTvWatermarkAndEpg(channel);

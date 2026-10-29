@@ -1192,6 +1192,24 @@ html, body {
     color: rgba(255, 255, 255, 0.6);
 }
 
+.channel-favorite {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #94a3b8;
+    border-radius: 50%;
+    background: #111827;
+    color: #e2e8f0;
+    font-size: 21px;
+    cursor: pointer;
+    z-index: 2;
+}
+.channel-favorite.selected { color: #facc15; border-color: #facc15; }
+.channel-favorite:focus-visible { outline: 3px solid white; outline-offset: 2px; }
+.tv-web-top-controls { flex-wrap: wrap; }
+
 .channel-nav-item .ch-logo-wrap {
     width: 48px;
     height: 48px;
