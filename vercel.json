@@ -19,6 +19,9 @@
       },
       "continue": true
     },
+    { "src": "/api/user/playlist/(url|upload|confirm)", "dest": "/api/user/playlist/$1.js" },
+    { "src": "/api/user/playlist/([^/]+)", "dest": "/api/user/playlist/[id].js?id=$1" },
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
     { "handle": "filesystem" },
     { "src": "/", "dest": "/server/public/index.html" },
     { "src": "/(.*)", "dest": "/server/public/$1" }
