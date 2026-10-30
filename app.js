@@ -521,6 +521,7 @@ function checkBrowserPlayback(channel, signal) {
             catch (error) { finish(false, error.message || 'No se pudo iniciar el reproductor'); }
         }
         function start() {
+            if (channel.playbackNotice) return finish(false, channel.playbackNotice);
             clearTimeout(timer);
             if (player) { player.destroy(); player = null; }
             video.onerror = null;
@@ -1182,6 +1183,7 @@ function playTvChannel(index) {
             fail('Este navegador no admite la reproducción HLS. Prueba con otro navegador o VLC.');
         }
     }
+    if (channel.playbackNotice) { fail(channel.playbackNotice); return; }
     startPlayback();
 
     video.onplaying = () => bufferBadge.classList.add('hidden');

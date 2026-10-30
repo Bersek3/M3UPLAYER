@@ -11,7 +11,7 @@ function importService() {
     }
     const module = { exports: {} };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/_lib/playlist-import.js'), 'utf8'), {
-        require: () => ({ ObjectId }), module, Date, Map
+        require: name => name === 'mongodb' ? { ObjectId } : require('../api/_lib/playback-source'), module, Date, Map
     });
     return module.exports;
 }

@@ -1,4 +1,5 @@
 const { ObjectId } = require('mongodb');
+const { playbackSource } = require('./playback-source');
 
 // Candidates are temporary analysis data, never part of the user's channel catalog.
 async function prepareImport(db, user, document) {
@@ -9,7 +10,7 @@ async function prepareImport(db, user, document) {
         expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000)
     });
     return { success: true, requiresPlaybackCheck: true, importId: result.insertedId,
-        channels: document.channels.map((ch, index) => ({ ...ch, candidateId: index })) };
+        channels: document.channels.map((ch, index) => ({ ...playbackSource(ch), candidateId: index })) };
 }
 
 async function confirmImport(db, user, body) {

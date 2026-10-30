@@ -1,6 +1,7 @@
 // api/user/channels.js — GET /api/user/channels
 const { connectDB } = require('../_lib/db');
 const { authenticate } = require('../_lib/auth');
+const { playbackSource } = require('../_lib/playback-source');
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ module.exports = async function handler(req, res) {
             if (Array.isArray(pl.channels)) {
                 pl.channels.forEach(ch => {
                     allChannels.push({
-                        ...ch,
+                        ...playbackSource(ch),
                         number: String(counter).padStart(3, '0'),
                         playlistName: pl.name
                     });

@@ -1,4 +1,5 @@
 const { prepareImport, confirmImport } = require('../api/_lib/playlist-import');
+const { playbackSource } = require('../api/_lib/playback-source');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -513,7 +514,7 @@ app.get('/api/user/channels', authenticate, async (req, res) => {
             if (Array.isArray(pl.channels)) {
                 pl.channels.forEach(ch => {
                     allChannels.push({
-                        ...ch,
+                        ...playbackSource(ch),
                         number: String(counter).padStart(3, '0'),
                         playlistName: pl.name
                     });
