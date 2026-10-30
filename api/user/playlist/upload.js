@@ -44,10 +44,7 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'El archivo no contiene canales válidos en formato M3U' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
+        const checked = await checkStreams(parsedChannels, { preserveAll: true });
         parsedChannels = checked.channels;
 
         const db = await connectDB();

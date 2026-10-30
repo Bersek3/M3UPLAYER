@@ -366,7 +366,7 @@ function initProfileView() {
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar lista');
 
-            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
+            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales. ${data.verification?.unverified ?? 0} sin verificar; algunos pueden funcionar solo en VLC o en la TV.`, 'success');
             formUrl.reset();
             await loadUserData();
         } catch (err) {
@@ -398,7 +398,7 @@ function initProfileView() {
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar archivo');
 
-            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales disponibles. ${data.verification?.excluded ?? 0} omitidos por no superar la comprobación.`, 'success');
+            showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales. ${data.verification?.unverified ?? 0} sin verificar; algunos pueden funcionar solo en VLC o en la TV.`, 'success');
             formFile.reset();
             fileLabel.textContent = 'Ningún archivo cargado (.m3u, .m3u8)';
             await loadUserData();

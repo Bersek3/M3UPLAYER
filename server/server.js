@@ -570,10 +570,7 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
+        const checked = await checkStreams(parsedChannels, { preserveAll: true });
         parsedChannels = checked.channels;
 
         const playlistDoc = {
@@ -619,10 +616,7 @@ app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), as
             return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels);
-        if (!checked.channels.length) {
-            return res.status(422).json({ error: `No se pudo verificar ningún canal de los ${parsedChannels.length}. Pueden estar caídos, bloqueados o tardar demasiado en responder.`, verification: checked.verification });
-        }
+        const checked = await checkStreams(parsedChannels, { preserveAll: true });
         parsedChannels = checked.channels;
 
         const playlistDoc = {

@@ -40,7 +40,7 @@ async function probe(url, signal, depth = 0) {
     }
 }
 
-async function checkStreams(channels, { concurrency = 64, timeoutMs = 3500, budgetMs = 18000 } = {}) {
+async function checkStreams(channels, { concurrency = 64, timeoutMs = 3500, budgetMs = 18000, preserveAll = false } = {}) {
     const deadline = Date.now() + budgetMs;
     const results = new Array(channels.length);
     let cursor = 0;
@@ -67,10 +67,11 @@ async function checkStreams(channels, { concurrency = 64, timeoutMs = 3500, budg
     await Promise.all(Array.from({ length: Math.min(concurrency, channels.length) }, worker));
     const working = results.filter(channel => channel.availability === 'online');
     return {
-        channels: working,
-        excludedChannels: results.filter(channel => channel.availability !== 'online'),
-        verification: { total: channels.length, online: working.length, excluded: channels.length - working.length,
-            unverified: results.filter(channel => channel.availability === 'unverified').length, checkedAt: new Date() }
+        // Import checks are advisory: a failed server probe does not prove a stream is dead.
+        channels: preserveAll ? results.map(channel => channel.availability === 'online' ? channel : { ...channel, availability: 'unverified' }) : working,
+        excludedChannels: preserveAll ? [] : results.filter(channel => channel.availability !== 'online'),
+        verification: { total: channels.length, online: working.length, excluded: preserveAll ? 0 : channels.length - working.length,
+            unverified: preserveAll ? channels.length - working.length : results.filter(channel => channel.availability === 'unverified').length, checkedAt: new Date() }
     };
 }
 
