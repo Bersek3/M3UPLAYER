@@ -1,4 +1,4 @@
-const { checkStreams } = require('../api/_lib/check-streams');
+const { prepareImport, confirmImport } = require('../api/_lib/playlist-import');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,34 +19,38 @@ let client = null;
 let db = null;
 let usersCol = null;
 let playlistsCol = null;
-let isConnecting = false;
+let connectionPromise = null;
 
-// Connect to MongoDB Atlas with auto-retry, timeout protection and IPv4 forced
+// Share one connection attempt so requests arriving during startup wait for it.
 async function connectDB() {
     if (db && usersCol && playlistsCol) return true;
-    if (isConnecting) return false;
-    isConnecting = true;
-    try {
-        console.log('Connecting to MongoDB Atlas...');
-        client = new MongoClient(MONGO_URI, {
-            serverSelectionTimeoutMS: 5000,
+    if (connectionPromise) return connectionPromise;
+    connectionPromise = (async () => {
+        const candidate = new MongoClient(MONGO_URI, {
+            serverSelectionTimeoutMS: 8000,
             connectTimeoutMS: 10000,
             family: 4
         });
-        await client.connect();
-        db = client.db(DB_NAME);
-        usersCol = db.collection('users');
-        playlistsCol = db.collection('playlists');
-        console.log('Connected successfully to MongoDB Atlas (Database: ' + DB_NAME + ')');
-        isConnecting = false;
-        return true;
-    } catch (err) {
-        isConnecting = false;
-        console.error('MongoDB Atlas Connection Error:', err.message);
-        if (err.message && (err.message.includes('alert number 80') || err.message.includes('tlsv1 alert internal error'))) {
-            console.error('⚠️ ATENCIÓN: Este error (SSL alert number 80) significa que MongoDB Atlas bloqueó la IP de Render. Debes agregar 0.0.0.0/0 en MongoDB Atlas -> Network Access.');
+        try {
+            console.log('Connecting to MongoDB Atlas...');
+            await candidate.connect();
+            const connectedDb = candidate.db(DB_NAME);
+            usersCol = connectedDb.collection('users');
+            playlistsCol = connectedDb.collection('playlists');
+            db = connectedDb;
+            client = candidate;
+            console.log('Connected successfully to MongoDB Atlas');
+            return true;
+        } catch (err) {
+            console.error('MongoDB Atlas Connection Error:', err.message);
+            await candidate.close().catch(() => {});
+            return false;
         }
-        return false;
+    })();
+    try {
+        return await connectionPromise;
+    } finally {
+        connectionPromise = null;
     }
 }
 connectDB();
@@ -56,14 +60,18 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Media transport does not require a database connection.
+app.all('/api/proxy/hls', require('../api/_lib/hls-proxy').handler);
+
 // Middleware to ensure DB connection before handling API routes
 app.use(async (req, res, next) => {
     if (req.path.startsWith('/api/')) {
         if (!usersCol || !playlistsCol) {
             const connected = await connectDB();
-            if (!connected && !usersCol) {
+            if (!connected) {
+                res.setHeader('Retry-After', '3');
                 return res.status(503).json({
-                    error: 'La base de datos aún no está conectada. Si estás en Render, asegúrate de habilitar 0.0.0.0/0 en Network Access de MongoDB Atlas.'
+                    error: 'El servicio est? temporalmente ocupado. Intenta nuevamente en unos segundos.'
                 });
             }
         }
@@ -570,31 +578,9 @@ app.post('/api/user/playlist/url', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'La URL proporcionada no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels, { preserveAll: true });
-        parsedChannels = checked.channels;
-
-        const playlistDoc = {
-            userId: req.user.userId,
-            username: req.user.username,
-            name: playlistName,
-            type: 'url',
-            sourceUrl: url,
-            channelCount: parsedChannels.length,
-            channels: parsedChannels,
-            excludedChannels: checked.excludedChannels,
-            verification: checked.verification,
-            updatedAt: new Date()
-        };
-
-        const result = await playlistsCol.insertOne(playlistDoc);
-
-        res.json({
-            success: true,
-            message: `¡Lista guardada con éxito! Se cargaron ${parsedChannels.length} canal(es).`,
-            playlistId: result.insertedId,
-            verification: checked.verification,
-            channelCount: parsedChannels.length
-        });
+        res.json(await prepareImport(db, req.user, {
+            name: playlistName, type: 'url', sourceUrl: url, channels: parsedChannels
+        }));
     } catch (err) {
         console.error('Add M3U URL error:', err);
         res.status(500).json({ error: 'Error al descargar o procesar la lista M3U: ' + err.message });
@@ -616,34 +602,20 @@ app.post('/api/user/playlist/upload', authenticate, upload.single('m3uFile'), as
             return res.status(400).json({ error: 'El archivo subido no contiene canales válidos en formato M3U o M3U8' });
         }
 
-        const checked = await checkStreams(parsedChannels, { preserveAll: true });
-        parsedChannels = checked.channels;
-
-        const playlistDoc = {
-            userId: req.user.userId,
-            username: req.user.username,
-            name: playlistName,
-            type: 'file',
-            fileName: req.file?.originalname || req.body.filename || 'archivo.m3u',
-            channelCount: parsedChannels.length,
-            channels: parsedChannels,
-            excludedChannels: checked.excludedChannels,
-            verification: checked.verification,
-            updatedAt: new Date()
-        };
-
-        const result = await playlistsCol.insertOne(playlistDoc);
-
-        res.json({
-            success: true,
-            message: `¡Archivo procesado con éxito! Se importaron ${parsedChannels.length} canales.`,
-            playlistId: result.insertedId,
-            verification: checked.verification,
-            channelCount: parsedChannels.length
-        });
+        res.json(await prepareImport(db, req.user, {
+            name: playlistName, type: 'file', fileName: req.file?.originalname || req.body.filename || 'archivo.m3u', channels: parsedChannels
+        }));
     } catch (err) {
         console.error('Upload M3U error:', err);
         res.status(500).json({ error: 'Error al procesar el archivo subido: ' + err.message });
+    }
+});
+
+app.post('/api/user/playlist/confirm', authenticate, async (req, res) => {
+    try {
+        res.json(await confirmImport(db, req.user, req.body));
+    } catch (error) {
+        res.status(422).json({ error: error.message });
     }
 });
 
@@ -754,7 +726,9 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+module.exports = app;
+
+if (require.main === module) app.listen(PORT, '0.0.0.0', () => {
     console.log(`====================================================`);
     console.log(`🚀 M3U Server & Web Portal running on:`);
     console.log(`👉 Local:   http://localhost:${PORT}`);

@@ -22,8 +22,68 @@ let filteredChannels = [];
 let activeProfileCategory = 'ALL';
 let userPlaylists = [];
 
+// Avoid repeatedly requesting broken logos during view changes.
+const failedLogoUrls = new Set();
+function usableLogo(url) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return '';
+    const secureUrl = url.replace(/^http:/i, 'https:');
+    return failedLogoUrls.has(secureUrl) ? '' : secureUrl;
+}
+document.addEventListener('error', event => {
+    if (event.target?.tagName === 'IMG' && event.target.src) failedLogoUrls.add(event.target.src);
+}, true);
+
 // TV Mode State
 let tvChannels = [];
+let tvAllChannels = [];
+let tvFavoritesOnly = false;
+let tvPlayingChannel = null;
+
+function channelFavoriteKey(channel) {
+    return JSON.stringify([channel.playlistName || '', channel.name || channel.url]);
+}
+
+function readTvFavorites() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('m3u_favorites:' + (currentUsername || 'guest')) || '[]');
+        return new Set(Array.isArray(saved) ? saved.filter(key => typeof key === 'string') : []);
+    } catch { return new Set(); }
+}
+
+function orderedTvChannels(channels, favorites, onlyFavorites) {
+    return channels.filter(ch => !onlyFavorites || favorites.has(channelFavoriteKey(ch)))
+        .slice().sort((a, b) => Number(favorites.has(channelFavoriteKey(b))) - Number(favorites.has(channelFavoriteKey(a))) ||
+            String(a.number || '').localeCompare(String(b.number || ''), 'es', { numeric: true }) ||
+            String(a.name || '').localeCompare(String(b.name || ''), 'es'));
+}
+
+function refreshTvFavorites() {
+    const favorites = readTvFavorites();
+    if (!tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)))) tvFavoritesOnly = false;
+    tvChannels = orderedTvChannels(tvAllChannels, favorites, tvFavoritesOnly);
+    currentTvIndex = tvPlayingChannel ? tvChannels.findIndex(ch => ch.url === tvPlayingChannel.url) : 0;
+    const filter = document.getElementById('btn-tv-favorites');
+    filter.textContent = tvFavoritesOnly ? '★ Favoritos · Ver todos' : '☆ Ver favoritos';
+    filter.setAttribute('aria-pressed', String(tvFavoritesOnly));
+    renderTvVerticalChannelsBar();
+}
+
+function toggleTvFavorite(channel) {
+    const favorites = readTvFavorites();
+    const key = channelFavoriteKey(channel);
+    const removing = favorites.has(key);
+    if (removing) favorites.delete(key);
+    else favorites.add(key);
+    try {
+        localStorage.setItem('m3u_favorites:' + (currentUsername || 'guest'), JSON.stringify([...favorites]));
+    } catch {
+        showToast('No se pudo guardar el favorito. Revisa el almacenamiento del navegador.');
+        return;
+    }
+    refreshTvFavorites();
+    showToast(removing ? 'Canal quitado de favoritos' : 'Canal añadido a favoritos');
+    showTvOverlayTemporarily();
+}
 let currentTvIndex = 0;
 let tvHls = null;
 let tvOverlayTimeout = null;
@@ -363,8 +423,9 @@ function initProfileView() {
                 body: JSON.stringify({ url, name })
             });
 
-            const data = await res.json();
+            let data = await readApiResponse(res, 'analizar la lista por URL');
             if (!res.ok || data.error) throw new Error(data.error || 'Error al guardar lista');
+            data = await analyzeAndSavePlaylist(data, submitBtn);
 
             showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales. ${data.verification?.unverified ?? 0} sin verificar; algunos pueden funcionar solo en VLC o en la TV.`, 'success');
             formUrl.reset();
@@ -395,8 +456,9 @@ function initProfileView() {
                 body: JSON.stringify({ content: await file.text(), name, filename: file.name })
             });
 
-            const data = await res.json();
+            let data = await readApiResponse(res, 'analizar el archivo M3U');
             if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar archivo');
+            data = await analyzeAndSavePlaylist(data, btnSubmitFile);
 
             showPlaylistFeedback(`Lista guardada: ${data.channelsCount ?? data.channelCount ?? 0} canales. ${data.verification?.unverified ?? 0} sin verificar; algunos pueden funcionar solo en VLC o en la TV.`, 'success');
             formFile.reset();
@@ -405,7 +467,7 @@ function initProfileView() {
         } catch (err) {
             showPlaylistFeedback(err.message, 'error');
         } finally {
-            btnSubmitFile.disabled = true;
+            btnSubmitFile.disabled = !fileInput.files.length;
             btnSubmitFile.innerHTML = '<span>📤 Subir Archivo y Procesar</span>';
         }
     });
@@ -413,36 +475,196 @@ function initProfileView() {
     document.getElementById('btn-refresh-playlists').addEventListener('click', () => loadUserData());
 }
 
+let playlistFeedbackTimer;
+let toastTimer;
+let userDataRevision = 0;
+const pendingPlaylistDeletes = new Set();
+
+// A successful download is not evidence that the browser can decode video.
+function checkBrowserPlayback(channel, signal) {
+    return new Promise(resolve => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.style.cssText = 'position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+        video.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(video);
+        let player, timer, poll, finished = false;
+        let mode = window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        let firstTime = null;
+        const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
+        const finish = (playable, reason) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            clearInterval(poll);
+            signal.removeEventListener('abort', abort);
+            if (player) player.destroy();
+            video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            video.remove();
+            resolve({ candidateId: channel.candidateId, playable, playbackMode: mode, reason });
+        };
+        const abort = () => finish(false, 'Análisis cancelado');
+        function retry(reason) {
+            if (finished) return;
+            if (mode === 'direct') {
+                mode = 'proxy';
+                safeStart();
+            } else finish(false, reason);
+        }
+        function safeStart() {
+            try { start(); }
+            catch (error) { finish(false, error.message || 'No se pudo iniciar el reproductor'); }
+        }
+        function start() {
+            clearTimeout(timer);
+            if (player) { player.destroy(); player = null; }
+            video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            firstTime = null;
+            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                player = new Hls({ enableWorker: true, maxBufferLength: 4, maxMaxBufferLength: 8, backBufferLength: 0,
+                    xhrSetup: (xhr, url) => {
+                        if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
+                            xhr.open('GET', proxyUrl(url), true);
+                        }
+                    }
+                });
+                const attempt = player;
+                player.on(Hls.Events.MANIFEST_PARSED, () => {
+                    if (player === attempt) video.play().catch(() => finish(false, 'El navegador no permitió iniciar el video'));
+                });
+                player.on(Hls.Events.ERROR, (_event, data) => {
+                    if (player !== attempt || !data.fatal) return;
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) retry('No se pudo acceder a la señal');
+                    else finish(false, 'El navegador no pudo decodificar el video');
+                });
+                player.loadSource(mode === 'proxy' ? proxyUrl(channel.url) : channel.url);
+                player.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.onerror = () => retry('Video incompatible o inaccesible');
+                video.src = mode === 'proxy' ? proxyUrl(channel.url) : channel.url;
+                video.play().catch(() => finish(false, 'El navegador no permitió iniciar el video'));
+            } else finish(false, 'Este navegador no admite HLS');
+        }
+        poll = setInterval(() => {
+            if (video.readyState < 2 || video.videoWidth <= 0 || video.paused || video.seeking) return;
+            const frames = video.getVideoPlaybackQuality?.().totalVideoFrames;
+            if (typeof frames === 'number' && frames < 2) return;
+            if (firstTime === null) firstTime = video.currentTime;
+            if (video.currentTime - firstTime >= 1) finish(true);
+        }, 200);
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+        else safeStart();
+    });
+}
+
+async function analyzeAndSavePlaylist(preview, button) {
+    if (!preview.requiresPlaybackCheck || !Array.isArray(preview.channels)) {
+        throw new Error('El servidor debe actualizarse para comprobar la reproducción antes de guardar.');
+    }
+    const token = currentUserToken;
+    const controller = new AbortController();
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn-submit-action';
+    cancel.textContent = 'Cancelar análisis';
+    cancel.onclick = () => controller.abort();
+    button.after(cancel);
+    const results = [];
+    let cursor = 0, completed = 0, playable = 0;
+    const progress = () => {
+        button.textContent = `Analizando ${completed}/${preview.channels.length} · ${playable} con video`;
+    };
+    progress();
+    try {
+        async function worker() {
+            while (cursor < preview.channels.length && !controller.signal.aborted) {
+                const channel = preview.channels[cursor++];
+                const result = await checkBrowserPlayback(channel, controller.signal);
+                results.push(result);
+                completed++;
+                if (result.playable) playable++;
+                progress();
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(2, preview.channels.length) }, worker));
+        if (controller.signal.aborted) throw new Error('Análisis cancelado. No se guardó la lista.');
+        if (token !== currentUserToken) throw new Error('La sesión cambió. Vuelve a cargar la lista.');
+        button.textContent = `Guardando ${preview.channels.length} canales...`;
+        cancel.disabled = true;
+        const response = await fetch(`${API_BASE}/api/user/playlist/confirm`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ importId: preview.importId, results })
+        });
+        const data = await readApiResponse(response, 'guardar los canales comprobados');
+        if (!response.ok || data.error) throw new Error(data.error || 'No se pudo guardar la lista comprobada');
+        return data;
+    } finally {
+        controller.abort();
+        cancel.remove();
+    }
+}
+
+async function readApiResponse(response, operation) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        const path = response.url ? new URL(response.url).pathname : '/api';
+        throw new Error(`No se pudo ${operation}: el servidor respondió HTTP ${response.status} en ${path} sin datos JSON. Recarga la página después del despliegue; si persiste, revisa la configuración de la API en Vercel.`);
+    }
+}
+
 function showPlaylistFeedback(msg, type) {
     const box = document.getElementById('playlist-action-feedback');
+    clearTimeout(playlistFeedbackTimer);
+    box.setAttribute('role', type === 'error' ? 'alert' : 'status');
     box.textContent = msg;
     box.className = `action-feedback ${type === 'success' ? 'alert-success' : 'alert-error'}`;
     box.classList.remove('hidden');
-    setTimeout(() => box.classList.add('hidden'), 5000);
+    playlistFeedbackTimer = setTimeout(() => box.classList.add('hidden'), 7000);
 }
 
 // Load playlists & channels for the authenticated user
 async function loadUserData() {
     if (!currentUserToken) return;
+    const revision = ++userDataRevision;
 
     try {
         // 1. Fetch user playlists
         const plRes = await fetch(`${API_BASE}/api/user/playlists`, {
+            cache: 'no-store',
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
+        if (revision !== userDataRevision) return;
+        if (!plRes.ok) throw new Error('No se pudieron actualizar las listas. Intenta nuevamente.');
         if (plRes.ok) {
             const plData = await plRes.json();
-            userPlaylists = plData.playlists || [];
+            if (revision !== userDataRevision) return;
+            userPlaylists = (plData.playlists || []).filter(pl => !pendingPlaylistDeletes.has(String(pl.id || pl._id)));
             renderUserPlaylists(userPlaylists);
         }
 
         // 2. Fetch user channels
         const chRes = await fetch(`${API_BASE}/api/user/channels`, {
+            cache: 'no-store',
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
 
+        if (revision !== userDataRevision) return;
+        if (!chRes.ok) throw new Error('No se pudieron actualizar los canales. Intenta nuevamente.');
         if (chRes.ok) {
             const chData = await chRes.json();
+            if (revision !== userDataRevision) return;
             allUserChannels = chData.channels || [];
             
             // If user has 0 channels uploaded yet, load public/default channels so they can see channels immediately
@@ -457,6 +679,7 @@ async function loadUserData() {
             }
         }
 
+        if (revision !== userDataRevision) return;
         // Update counters
         document.getElementById('profile-total-channels-badge').textContent = allUserChannels.length;
         document.getElementById('profile-total-playlists-badge').textContent = userPlaylists.length;
@@ -468,12 +691,14 @@ async function loadUserData() {
 
     } catch (err) {
         console.error('Error cargando datos de usuario:', err);
+        if (revision === userDataRevision) showPlaylistFeedback(err.message, 'error');
     }
 }
 
 function renderUserPlaylists(playlists) {
     const container = document.getElementById('profile-playlists-list');
     container.innerHTML = '';
+    document.getElementById('profile-total-playlists-badge').textContent = playlists?.length || 0;
 
     if (!playlists || playlists.length === 0) {
         container.innerHTML = '<p class="dropzone-hint" style="text-align:center; padding: 20px;">No tienes listas guardadas aún.</p>';
@@ -492,18 +717,38 @@ function renderUserPlaylists(playlists) {
         `;
 
         item.querySelector('.btn-delete-pl').addEventListener('click', async () => {
+            const id = String(pl.id || pl._id);
+            if (pendingPlaylistDeletes.has(id)) return;
             if (!confirm(`¿Eliminar la lista "${pl.name}"?`)) return;
+            pendingPlaylistDeletes.add(id);
+            ++userDataRevision;
+            const index = userPlaylists.findIndex(entry => String(entry.id || entry._id) === id);
+            userPlaylists = userPlaylists.filter(entry => String(entry.id || entry._id) !== id);
+            renderUserPlaylists(userPlaylists);
+            showPlaylistFeedback('Eliminando lista…', 'success');
             try {
-                const res = await fetch(`${API_BASE}/api/user/playlist/${pl.id || pl._id}`, {
+                const res = await fetch(`${API_BASE}/api/user/playlist/${encodeURIComponent(id)}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${currentUserToken}` }
                 });
-                if (res.ok) {
-                    showToast('Lista eliminada correctamente');
-                    loadUserData();
-                }
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error) throw new Error(data.error || 'No se pudo eliminar la lista. Intenta nuevamente.');
+                ++userDataRevision;
+                userPlaylists = userPlaylists.filter(entry => String(entry.id || entry._id) !== id);
+                renderUserPlaylists(userPlaylists);
+                showPlaylistFeedback('Lista eliminada correctamente.', 'success');
+                showToast('Lista eliminada correctamente');
             } catch (e) {
-                alert('Error al eliminar');
+                ++userDataRevision;
+                if (!userPlaylists.some(entry => String(entry.id || entry._id) === id)) {
+                    userPlaylists.splice(Math.max(0, index), 0, pl);
+                }
+                renderUserPlaylists(userPlaylists);
+                showPlaylistFeedback(`${e.message} La lista se ha restaurado en pantalla.`, 'error');
+                showToast('No se pudo eliminar la lista');
+            } finally {
+                pendingPlaylistDeletes.delete(id);
+                if (pendingPlaylistDeletes.size === 0) await loadUserData();
             }
         });
 
@@ -575,8 +820,8 @@ function renderProfileChannelsGrid() {
         card.className = 'user-channel-card';
 
         let logoHtml = '';
-        if (ch.logo && ch.logo.startsWith('http')) {
-            logoHtml = `<img src="${escapeHtml(ch.logo)}" alt="" class="card-channel-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;font-size:24px;">📺</span>`;
+        if (usableLogo(ch.logo)) {
+            logoHtml = `<img src="${escapeHtml(usableLogo(ch.logo))}" alt="" class="card-channel-logo" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;font-size:24px;">📺</span>`;
         } else {
             logoHtml = `<span style="font-size:24px;">📺</span>`;
         }
@@ -607,8 +852,49 @@ function renderProfileChannelsGrid() {
 // ==========================================================================
 // VIEW 3: VER EN VIVO (IDENTICAL SAMSUNG SMART TV DESIGN)
 // ==========================================================================
+function initTvVolume(video) {
+    const slider = document.getElementById('tv-volume');
+    const level = document.getElementById('tv-volume-level');
+    const mute = document.getElementById('btn-tv-mute');
+    try {
+        const saved = JSON.parse(localStorage.getItem('m3u_player_audio') || 'null');
+        if (saved && typeof saved.volume === 'number' && Number.isFinite(saved.volume)) {
+            video.volume = Math.max(0, Math.min(1, saved.volume));
+            video.muted = saved.muted === true;
+        }
+    } catch { /* Use the browser's current audio settings if storage is unavailable. */ }
+    const update = () => {
+        const percent = Math.round(video.volume * 100);
+        const silent = video.muted || percent === 0;
+        slider.value = percent;
+        slider.setAttribute('aria-valuetext', `${percent}%${video.muted ? ', silenciado' : ''}`);
+        level.textContent = video.muted ? '0%' : `${percent}%`;
+        mute.textContent = silent ? '🔇' : '🔊';
+        mute.setAttribute('aria-label', silent ? 'Activar sonido' : 'Silenciar');
+        mute.setAttribute('aria-pressed', String(silent));
+        try {
+            localStorage.setItem('m3u_player_audio', JSON.stringify({ volume: video.volume, muted: video.muted }));
+        } catch { /* Audio controls remain usable without storage. */ }
+    };
+    slider.addEventListener('input', () => {
+        video.volume = Number(slider.value) / 100;
+        video.muted = video.volume === 0;
+        update();
+    });
+    mute.addEventListener('click', () => {
+        if (video.muted || video.volume === 0) {
+            if (video.volume === 0) video.volume = 0.5;
+            video.muted = false;
+        } else video.muted = true;
+        update();
+    });
+    video.addEventListener('volumechange', update);
+    update();
+}
+
 function initTvPlayer() {
     const video = document.getElementById('tv-main-video');
+    initTvVolume(video);
     const btnExit = document.getElementById('btn-tv-exit-view');
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
     const btnFullscreen = document.getElementById('btn-tv-fullscreen');
@@ -623,6 +909,16 @@ function initTvPlayer() {
     });
 
     btnToggleMenu.addEventListener('click', () => toggleTvOverlay());
+    document.getElementById('btn-tv-favorites').addEventListener('click', () => {
+        const favorites = readTvFavorites();
+        if (!tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)))) {
+            showToast('Pulsa la estrella de un canal para añadirlo a favoritos');
+            return;
+        }
+        tvFavoritesOnly = !tvFavoritesOnly;
+        refreshTvFavorites();
+        showTvOverlayTemporarily();
+    });
 
     btnFullscreen.addEventListener('click', () => {
         if (!document.fullscreenElement) {
@@ -635,6 +931,7 @@ function initTvPlayer() {
     // Keyboard support like Samsung Remote Control
     window.addEventListener('keydown', (e) => {
         if (currentView !== 'live') return;
+        if (e.target.matches?.('input, select, textarea, button')) return;
 
         switch (e.key) {
             case 'ArrowUp':
@@ -692,7 +989,11 @@ async function launchTvLiveMode(targetChannel = null) {
         }
     }
 
-    renderTvVerticalChannelsBar();
+    tvAllChannels = tvChannels.slice();
+    const favorites = readTvFavorites();
+    tvFavoritesOnly = !targetChannel && tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)));
+    tvPlayingChannel = targetChannel;
+    refreshTvFavorites();
 
     // Select channel
     if (targetChannel) {
@@ -702,6 +1003,7 @@ async function launchTvLiveMode(targetChannel = null) {
         currentTvIndex = 0;
     }
 
+    renderTvVerticalChannelsBar();
     playTvChannel(currentTvIndex);
     showTvOverlayTemporarily();
 }
@@ -709,6 +1011,7 @@ async function launchTvLiveMode(targetChannel = null) {
 function renderTvVerticalChannelsBar() {
     const list = document.getElementById('tv-channels-scroll-list');
     list.innerHTML = '';
+    const favorites = readTvFavorites();
 
     tvChannels.forEach((ch, idx) => {
         const item = document.createElement('div');
@@ -723,9 +1026,11 @@ function renderTvVerticalChannelsBar() {
         const logoWrap = document.createElement('div');
         logoWrap.className = 'ch-logo-wrap';
 
-        if (ch.logo && ch.logo.startsWith('http')) {
+        if (usableLogo(ch.logo)) {
             const img = document.createElement('img');
-            img.src = ch.logo;
+            img.loading = 'lazy';
+            img.referrerPolicy = 'no-referrer';
+            img.src = usableLogo(ch.logo);
             img.alt = ch.name;
             img.onerror = () => {
                 img.style.display = 'none';
@@ -737,6 +1042,21 @@ function renderTvVerticalChannelsBar() {
         }
 
         item.appendChild(logoWrap);
+
+        const favorite = document.createElement('button');
+        const isFavorite = favorites.has(channelFavoriteKey(ch));
+        favorite.type = 'button';
+        favorite.className = 'channel-favorite' + (isFavorite ? ' selected' : '');
+        favorite.textContent = isFavorite ? '★' : '☆';
+        favorite.setAttribute('aria-pressed', String(isFavorite));
+        favorite.setAttribute('aria-label', `${isFavorite ? 'Quitar de' : 'Añadir a'} favoritos: ${ch.name}`);
+        favorite.addEventListener('click', event => {
+            event.stopPropagation();
+            toggleTvFavorite(ch);
+            const replacement = document.getElementById('tv-channels-scroll-list').querySelector(`[data-index="${tvChannels.findIndex(c => c.url === ch.url)}"] .channel-favorite`);
+            (replacement || document.getElementById('btn-tv-favorites')).focus();
+        });
+        item.appendChild(favorite);
 
         item.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -771,13 +1091,15 @@ function updateTvVerticalPosition() {
 
 function changeTvChannel(delta) {
     if (tvChannels.length === 0) return;
-    currentTvIndex = (currentTvIndex + delta + tvChannels.length) % tvChannels.length;
+    currentTvIndex = currentTvIndex < 0 ? (delta < 0 ? tvChannels.length - 1 : 0)
+        : (currentTvIndex + delta + tvChannels.length) % tvChannels.length;
     playTvChannel(currentTvIndex);
 }
 
 function playTvChannel(index) {
     const channel = tvChannels[index];
     if (!channel) return;
+    tvPlayingChannel = channel;
 
     updateTvVerticalPosition();
     updateTvWatermarkAndEpg(channel);
@@ -795,39 +1117,72 @@ function playTvChannel(index) {
     }
 
     const streamUrl = channel.url;
+    let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
+    let recoveredMedia = false;
+    const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.onerror = null;
 
-    if (Hls.isSupported() && (streamUrl.includes('.m3u8') || streamUrl.startsWith('http'))) {
-        tvHls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 30
-        });
-
-        tvHls.loadSource(streamUrl);
-        tvHls.attachMedia(video);
-
-        tvHls.on(Hls.Events.MANIFEST_PARSED, () => {
-            bufferBadge.classList.add('hidden');
-            video.play().catch(() => {});
-        });
-
-        tvHls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) {
-                bufferBadge.classList.add('hidden');
-                errorBadge.classList.remove('hidden');
-                document.getElementById('tv-error-text').textContent = 'Señal no disponible temporalmente';
-            }
-        });
-
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = streamUrl;
-        video.play().then(() => {
-            bufferBadge.classList.add('hidden');
-        }).catch(() => {
-            bufferBadge.classList.add('hidden');
-            errorBadge.classList.remove('hidden');
-        });
+    function fail(message) {
+        bufferBadge.classList.add('hidden');
+        errorBadge.classList.remove('hidden');
+        document.getElementById('tv-error-text').textContent = message;
+        showToast(message);
     }
+
+    function startPlayback() {
+        if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+            const player = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 30,
+                xhrSetup: (xhr, url) => {
+                    if (usingProxy) {
+                        const resolved = new URL(url, window.location.href);
+                        if (resolved.pathname !== '/api/proxy/hls') xhr.open('GET', proxyUrl(url), true);
+                    }
+                }
+            });
+            tvHls = player;
+            player.on(Hls.Events.MANIFEST_PARSED, () => {
+                if (tvHls !== player) return;
+                video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+            });
+            player.on(Hls.Events.ERROR, (_event, data) => {
+                if (tvHls !== player || !data.fatal) return;
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy) {
+                    usingProxy = true;
+                    showToast('Reintentando la señal mediante el servidor…');
+                    startPlayback();
+                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
+                    recoveredMedia = true;
+                    player.recoverMediaError();
+                } else {
+                    player.stopLoad();
+                    fail(data.type === Hls.ErrorTypes.NETWORK_ERROR
+                        ? 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.'
+                        : 'El navegador no pudo decodificar este video. Prueba abrirlo en VLC.');
+                }
+            });
+            player.loadSource(usingProxy ? proxyUrl(streamUrl) : streamUrl);
+            player.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.onerror = () => {
+                if (!usingProxy) {
+                    usingProxy = true;
+                    startPlayback();
+                } else fail('No se pudo reproducir esta señal en el navegador. Prueba abrirla en VLC.');
+            };
+            video.src = usingProxy ? proxyUrl(streamUrl) : streamUrl;
+            video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+        } else {
+            fail('Este navegador no admite la reproducción HLS. Prueba con otro navegador o VLC.');
+        }
+    }
+    startPlayback();
 
     video.onplaying = () => bufferBadge.classList.add('hidden');
     video.onwaiting = () => bufferBadge.classList.remove('hidden');
@@ -836,8 +1191,9 @@ function playTvChannel(index) {
 function updateTvWatermarkAndEpg(channel) {
     // Watermark
     const watermark = document.getElementById('tv-watermark-img');
-    if (channel.logo && channel.logo.startsWith('http')) {
-        watermark.src = channel.logo;
+    if (usableLogo(channel.logo)) {
+        watermark.referrerPolicy = 'no-referrer';
+        watermark.src = usableLogo(channel.logo);
         watermark.classList.remove('hidden');
         watermark.onerror = () => watermark.classList.add('hidden');
     } else {
@@ -924,9 +1280,11 @@ function initClock() {
 // Utilities
 function showToast(msg) {
     const toast = document.getElementById('toast-notify');
+    clearTimeout(toastTimer);
+    toast.setAttribute('role', 'status');
     toast.textContent = msg;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 3500);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
 function escapeHtml(str) {
