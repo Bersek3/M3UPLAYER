@@ -5,7 +5,17 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
-const { createHandler, ffmpegArgs } = require('./server');
+const { createHandler, ffmpegArgs, normalizeOrigin } = require('./server');
+
+test('origin configuration tolerates whitespace and trailing slash without expanding access', () => {
+    for (const value of [' https://player.example/ ', 'https://PLAYER.example', 'https://player.example:443/']) {
+        assert.equal(normalizeOrigin(value), 'https://player.example');
+    }
+    for (const value of [undefined, '', '*', 'http://player.example', 'https://player.example/watch',
+        'https://user:pass@player.example', 'https://player.example/?x=1', 'https://player.example/#test']) {
+        assert.throws(() => normalizeOrigin(value), /ALLOWED_ORIGIN/);
+    }
+});
 
 test('serves generated HLS and segments with CORS; rejects arbitrary paths and stale video', async t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-test-'));

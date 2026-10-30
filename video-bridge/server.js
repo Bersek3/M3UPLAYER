@@ -74,13 +74,20 @@ function createHandler(dir, allowedOrigin) {
     };
 }
 
+function normalizeOrigin(value) {
+    const message = 'ALLOWED_ORIGIN debe ser la URL HTTPS de tu pagina, por ejemplo https://m3u-player-one.vercel.app';
+    let origin;
+    try { origin = new URL(String(value || '').trim()); }
+    catch { throw new Error(message); }
+    if (origin.protocol !== 'https:' || origin.username || origin.password ||
+        origin.pathname !== '/' || origin.search || origin.hash) throw new Error(message);
+    return origin.origin;
+}
+
 function main() {
     const source = new URL(process.env.SOURCE_URL || 'http://181.78.79.131:8000/play/a0q9');
     if (!['http:', 'https:'].includes(source.protocol)) throw new Error('Invalid SOURCE_URL');
-    const origin = new URL(process.env.ALLOWED_ORIGIN);
-    if (origin.protocol !== 'https:' || origin.origin !== process.env.ALLOWED_ORIGIN) {
-        throw new Error('ALLOWED_ORIGIN must be the HTTPS origin of the page, without a trailing slash');
-    }
+    const origin = normalizeOrigin(process.env.ALLOWED_ORIGIN);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tnt-hls-'));
     let child, retryTimer, stopping = false, started = Date.now();
     function start() {
@@ -110,7 +117,7 @@ function main() {
             } catch {}
         }
     }, 10000);
-    const server = http.createServer(createHandler(dir, origin.origin));
+    const server = http.createServer(createHandler(dir, origin));
     server.listen(Number(process.env.PORT || 10000), '0.0.0.0', start);
     function stop() {
         if (stopping) return;
@@ -124,4 +131,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { ffmpegArgs, createHandler };
+module.exports = { ffmpegArgs, createHandler, normalizeOrigin };
