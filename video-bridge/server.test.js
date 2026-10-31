@@ -61,3 +61,11 @@ test('conversion produces bounded HLS with browser codecs and unique segment ses
     assert.ok(args.includes('delete_segments+independent_segments+temp_file+discont_start'));
     assert.match(args[args.indexOf('-hls_segment_filename') + 1], /segment-123-/);
 });
+
+
+test('damaged input is filtered before decoding and audio gap repair does not stretch voices', () => {
+    const args = ffmpegArgs('http://example.test:8000/live', '/tmp/video', 123);
+    assert.ok(args.indexOf('-fflags') < args.indexOf('-i'));
+    assert.equal(args[args.indexOf('-fflags') + 1], '+genpts+discardcorrupt');
+    assert.equal(args[args.indexOf('-af') + 1], 'aresample=48000:async=1');
+});

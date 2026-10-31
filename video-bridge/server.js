@@ -9,13 +9,16 @@ function ffmpegArgs(source, dir, session) {
     return ['-hide_banner', '-loglevel', 'error', '-nostdin',
         '-progress', 'pipe:1', '-stats_period', '15',
         '-rw_timeout', '15000000', '-reconnect', '1', '-reconnect_streamed', '1',
-        '-reconnect_delay_max', '5', '-user_agent', 'VLC/3.0.21', '-i', source,
+        '-reconnect_delay_max', '5', '-user_agent', 'VLC/3.0.21',
+        '-fflags', '+genpts+discardcorrupt', '-i', source,
         '-map', '0:v:0', '-map', '0:a:0?',
-        '-vf', "fps=30,scale=w='min(1280,iw)':h=-2", '-c:v', 'libx264', '-preset', 'ultrafast',
+        '-vf', "fps=30,scale=w='min(960,iw)':h=-2", '-c:v', 'libx264', '-preset', 'ultrafast',
         '-pix_fmt', 'yuv420p', '-crf', '23', '-maxrate', '2500k', '-bufsize', '5000k',
         '-g', '60', '-keyint_min', '60', '-sc_threshold', '0',
         '-force_key_frames', 'expr:gte(t,n_forced*2)',
-        '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000',
+        // Fill timestamp gaps with silence; async=1 avoids stretching speech to catch up.
+        '-af', 'aresample=48000:async=1',
+        '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000',
         '-f', 'hls', '-hls_time', '2', '-hls_list_size', '30', '-hls_delete_threshold', '10',
         '-hls_start_number_source', 'epoch',
         '-hls_flags', 'delete_segments+independent_segments+temp_file+discont_start',
@@ -95,9 +98,20 @@ function main() {
     function start() {
         started = Date.now();
         child = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ffmpegArgs(source.href, dir, Date.now()),
-            { stdio: ['ignore', 'pipe', 'ignore'] });
+            { stdio: ['ignore', 'pipe', 'pipe'] });
         // Log only numeric progress, never upstream URLs or credentials.
         let progress = '';
+        let decoderErrors = 0;
+        let errorLine = '';
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', chunk => {
+            errorLine += chunk;
+            const lines = errorLine.split(/\r?\n/);
+            errorLine = lines.pop().slice(-2048);
+            for (const line of lines) {
+                if (/corrupt|invalid|decode|error|conceal|missing|non.monoton/i.test(line)) decoderErrors++;
+            }
+        });
         child.stdout.setEncoding('utf8');
         child.stdout.on('data', chunk => {
             progress += chunk;
@@ -105,7 +119,10 @@ function main() {
             progress = lines.pop().slice(-1024);
             for (const line of lines) {
                 const speed = /^speed=\s*(\d+(?:\.\d+)?)x$/.exec(line);
-                if (speed) console.log('Video encoding speed=' + speed[1] + 'x (sustained below 1x requires attention)');
+                if (speed) {
+                    console.log('Video encoding speed=' + speed[1] + 'x; decoder/timestamp errors=' + decoderErrors);
+                    decoderErrors = 0;
+                }
             }
         });
         child.on('error', () => console.error('Could not start FFmpeg. Check installation.'));

@@ -73,7 +73,7 @@ Referencias: [limites de funciones Vercel](https://vercel.com/docs/functions/lim
 
 ## Continuidad y diagnostico de cortes
 
-El conversor usa H.264 ultrafast a 720p como maximo y 30 fps para reducir CPU,
+El conversor usa H.264 ultrafast con ancho maximo de 960 pixeles y 30 fps para reducir CPU,
 con segmentos de 2 segundos y una ventana de 60 segundos. El cambio a 30 fps
 reduce la fluidez de fuentes de 50/60 fps; ultrafast puede reducir calidad al
 mismo limite de bitrate. La ventana amplia tolera retrasos del cliente, pero no
@@ -89,3 +89,12 @@ y restaura ese presupuesto cuando descarga un fragmento correctamente.
 Estos cambios requieren desplegar tanto video-bridge en Render como la pagina.
 Las pruebas automaticas verifican argumentos, transporte y recuperacion; no
 miden la velocidad real de FFmpeg ni garantizan la disponibilidad de la fuente.
+
+
+Para evitar propagar errores de transporte se descartan paquetes marcados como
+corruptos y se generan timestamps faltantes. El audio usa AAC a 192 kbit/s y
+resincronizacion a 48 kHz con async=1: rellena o recorta huecos sin estirar las
+voces. No reconstruye muestras o cuadros ya perdidos en el origen.
+Los registros incluyen un contador de errores de decodificacion/timestamps por
+intervalo, sin publicar mensajes del origen ni sus credenciales. Es un indicador
+de diagnostico, no una medida exacta de paquetes perdidos.
