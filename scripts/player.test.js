@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-function player(url) {
+function player(url, fields = {}) {
     const instances = [];
     class Hls {
         static isSupported() { return true; }
@@ -23,7 +23,7 @@ function player(url) {
             pause() {}, load() {}, removeAttribute() {}, play: async () => {} });
         return elements.get(id);
     } };
-    const context = vm.createContext({ tvChannels: [{ url }], tvHls: null, Hls, document,
+    const context = vm.createContext({ tvChannels: [{ url, ...fields }], tvHls: null, Hls, document,
         window: { location: { protocol: 'https:', href: 'https://player.example/' } },
         URL, API_BASE: '', updateTvVerticalPosition() {}, updateTvWatermarkAndEpg() {}, showToast() {} });
     const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
@@ -51,4 +51,11 @@ test('network failure retries once through proxy and then shows an error', () =>
     assert.equal(instances.length, 2);
     assert.equal(instances[1].stopped, true);
     assert.ok(elements.get('tv-error-text').textContent);
+});
+
+test('unconfigured continuous video explains the required service without failing through the HLS proxy', () => {
+    const notice = 'Configura TNT_SPORTS_HLS_URL';
+    const { instances, elements } = player('http://181.78.79.131:8000/play/a0q9', { playbackNotice: notice });
+    assert.equal(instances.length, 0);
+    assert.equal(elements.get('tv-error-text').textContent, notice);
 });

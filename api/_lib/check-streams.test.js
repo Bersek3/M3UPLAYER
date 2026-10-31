@@ -31,3 +31,21 @@ test('imports only streams with media; follows relative HLS manifests and reject
         global.fetch = original;
     }
 });
+
+
+test('advisory import preserves channels when all probes fail', async () => {
+    const original = global.fetch;
+    global.fetch = async () => new Response('blocked', { status: 403 });
+    try {
+        const channels = [{ name: 'TNT Sports', url: 'http://example.test/live' }];
+        const result = await checkStreams(channels, { preserveAll: true });
+        assert.equal(result.channels.length, 1);
+        assert.equal(result.channels[0].url, channels[0].url);
+        assert.equal(result.channels[0].availability, 'unverified');
+        assert.equal(result.channels[0].reason, 'HTTP 403');
+        assert.deepEqual(result.excludedChannels, []);
+        assert.equal(result.verification.online, 0);
+        assert.equal(result.verification.excluded, 0);
+        assert.equal(result.verification.unverified, 1);
+    } finally { global.fetch = original; }
+});

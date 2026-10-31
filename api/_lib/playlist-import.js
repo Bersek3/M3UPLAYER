@@ -1,4 +1,5 @@
 const { ObjectId } = require('mongodb');
+const { playbackSource } = require('./playback-source');
 
 // Candidates are temporary analysis data, never part of the user's channel catalog.
 async function prepareImport(db, user, document) {
@@ -9,7 +10,7 @@ async function prepareImport(db, user, document) {
         expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000)
     });
     return { success: true, requiresPlaybackCheck: true, importId: result.insertedId,
-        channels: document.channels.map((ch, index) => ({ ...ch, candidateId: index })) };
+        channels: document.channels.map((ch, index) => ({ ...playbackSource(ch), candidateId: index })) };
 }
 
 async function confirmImport(db, user, body) {
@@ -31,11 +32,11 @@ async function confirmImport(db, user, body) {
             channels.push({ ...channel, number: String(channels.length + 1).padStart(3, '0'),
                 playbackMode: result.playbackMode, availability: 'online', browserVerifiedAt: new Date() });
         } else {
-            excludedChannels.push({ name: channel.name, reason: String(result?.reason || 'Sin reproducción comprobada').slice(0, 200) });
+            channels.push({ ...channel, number: String(channels.length + 1).padStart(3, '0'), availability: 'unverified', reason: String(result?.reason || 'Sin video comprobado').slice(0, 200) });
         }
     });
-    if (!channels.length) throw new Error('Ningún canal logró reproducirse en este navegador. No se guardó la lista.');
-    const verification = { total: staged.channels.length, online: channels.length,
+    const verification = { total: staged.channels.length, online: channels.filter(channel => channel.availability === 'online').length,
+        unverified: channels.filter(channel => channel.availability === 'unverified').length,
         excluded: excludedChannels.length, method: 'browser-playback', checkedAt: new Date() };
     const { expiresAt, ...document } = staged;
     await db.collection('playlists').updateOne({ _id: id, userId: user.userId }, { $setOnInsert: {

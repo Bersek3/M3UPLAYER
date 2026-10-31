@@ -11,12 +11,12 @@ function importService() {
     }
     const module = { exports: {} };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/_lib/playlist-import.js'), 'utf8'), {
-        require: () => ({ ObjectId }), module, Date, Map
+        require: name => name === 'mongodb' ? { ObjectId } : require('../api/_lib/playback-source'), module, Date, Map
     });
     return module.exports;
 }
 
-test('only browser-confirmed candidates are saved, with their tested playback mode', async () => {
+test('all candidates are saved and only confirmed playback is marked online', async () => {
     const service = importService();
     let saved;
     const staged = { _id: 'a'.repeat(24), name: 'Test', userId: 'user', channels: [
@@ -37,22 +37,29 @@ test('only browser-confirmed candidates are saved, with their tested playback mo
         { candidateId: 1, playable: false, reason: 'No video' },
         { candidateId: 999, playable: true, playbackMode: 'direct' }
     ] });
-    assert.equal(result.channelsCount, 1);
+    assert.equal(result.channelsCount, 3);
     assert.equal(saved.channels[0].name, 'Working');
     assert.equal(saved.channels[0].playbackMode, 'proxy');
-    assert.equal(saved.excludedChannels.length, 2);
+    assert.equal(saved.excludedChannels.length, 0);
+    assert.equal(saved.channels[1].availability, 'unverified');
+    assert.equal(saved.channels[2].availability, 'unverified');
+    assert.equal(saved.verification.online, 1);
+    assert.equal(saved.verification.unverified, 2);
     assert.equal(saved.verification.method, 'browser-playback');
 });
 
-test('empty playback results never create a playlist', async () => {
+test('empty playback results save channels without claiming browser playback', async () => {
     const service = importService();
     let writes = 0;
     const db = { collection: name => ({
         findOne: async () => name === 'playlists' ? null : { channels: [{ name: 'Unverified' }] },
-        updateOne: async () => { writes++; }
+        deleteOne: async () => {}, updateOne: async () => { writes++; }
     }) };
-    await assert.rejects(service.confirmImport(db, { userId: 'user' }, { importId: 'a'.repeat(24), results: [] }), /No se guardó/);
-    assert.equal(writes, 0);
+    const result = await service.confirmImport(db, { userId: 'user' }, { importId: 'a'.repeat(24), results: [] });
+    assert.equal(writes, 1);
+    assert.equal(result.channelsCount, 1);
+    assert.equal(result.verification.online, 0);
+    assert.equal(result.verification.unverified, 1);
 });
 
 test('preparation only stages candidates, without publishing channels', async () => {

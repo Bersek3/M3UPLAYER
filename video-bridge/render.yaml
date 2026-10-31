@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tnt-video-bridge
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./video-bridge/Dockerfile
+    dockerContext: ./video-bridge
+    healthCheckPath: /health
+    envVars:
+      - key: SOURCE_URL
+        value: http://181.78.79.131:8000/play/a0q9
+      - key: ALLOWED_ORIGIN
+        sync: false
