@@ -53,7 +53,10 @@ test('conversion produces bounded HLS with browser codecs and unique segment ses
     const args = ffmpegArgs('http://example.test:8000/live', '/tmp/video', 123);
     assert.equal(args[args.indexOf('-c:v') + 1], 'libx264');
     assert.equal(args[args.indexOf('-c:a') + 1], 'aac');
-    assert.equal(args[args.indexOf('-hls_list_size') + 1], '8');
+    assert.equal(args[args.indexOf('-preset') + 1], 'ultrafast');
+    assert.match(args[args.indexOf('-vf') + 1], /^fps=30,/);
+    assert.equal(args[args.indexOf('-g') + 1], '60');
+    assert.equal(args[args.indexOf('-hls_list_size') + 1], '30');
     assert.equal(args[args.indexOf('-hls_start_number_source') + 1], 'epoch');
     assert.ok(args.includes('delete_segments+independent_segments+temp_file+discont_start'));
     assert.match(args[args.indexOf('-hls_segment_filename') + 1], /segment-123-/);

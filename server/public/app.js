@@ -1121,6 +1121,8 @@ function playTvChannel(index) {
     const streamUrl = channel.url;
     let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
     let recoveredMedia = false;
+    let networkRetries = 0;
+    let retryTimer = null;
     const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
     video.pause();
     video.removeAttribute('src');
@@ -1145,6 +1147,10 @@ function playTvChannel(index) {
                 maxBufferLength: 30,
                 maxMaxBufferLength: 60,
                 maxBufferSize: 32 * 1024 * 1024,
+                capLevelToPlayerSize: true,
+                capLevelOnFPSDrop: true,
+                abrBandWidthFactor: 0.8,
+                abrBandWidthUpFactor: 0.6,
                 backBufferLength: 10,
                 xhrSetup: (xhr, url) => {
                     if (usingProxy) {
@@ -1154,6 +1160,11 @@ function playTvChannel(index) {
                 }
             });
             tvHls = player;
+            const destroy = player.destroy.bind(player);
+            player.destroy = () => { clearTimeout(retryTimer); retryTimer = null; destroy(); };
+            player.on(Hls.Events.FRAG_LOADED, () => {
+                if (tvHls === player) networkRetries = 0;
+            });
             player.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (tvHls !== player) return;
                 video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
@@ -1164,6 +1175,15 @@ function playTvChannel(index) {
                     usingProxy = true;
                     showToast('Reintentando la señal mediante el servidor…');
                     startPlayback();
+                } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRetries < 3) {
+                    // Keep decoded media while retrying transient origin failures.
+                    if (retryTimer !== null) return;
+                    const delay = 1000 * Math.pow(2, networkRetries++);
+                    bufferBadge.classList.remove('hidden');
+                    retryTimer = setTimeout(() => {
+                        retryTimer = null;
+                        if (tvHls === player) player.startLoad();
+                    }, delay);
                 } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
                     recoveredMedia = true;
                     player.recoverMediaError();

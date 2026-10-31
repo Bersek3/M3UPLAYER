@@ -69,3 +69,23 @@ Referencias: [limites de funciones Vercel](https://vercel.com/docs/functions/lim
 [servicios web y HTTPS en Render](https://render.com/docs/web-services),
 [suspension del plan gratuito](https://render.com/docs/free),
 [salida HLS de FFmpeg](https://ffmpeg.org/ffmpeg-formats.html#hls-2).
+
+
+## Continuidad y diagnostico de cortes
+
+El conversor usa H.264 ultrafast a 720p como maximo y 30 fps para reducir CPU,
+con segmentos de 2 segundos y una ventana de 60 segundos. El cambio a 30 fps
+reduce la fluidez de fuentes de 50/60 fps; ultrafast puede reducir calidad al
+mismo limite de bitrate. La ventana amplia tolera retrasos del cliente, pero no
+obliga al reproductor a esperar un minuto antes de reproducir.
+
+Los registros imprimen la velocidad de FFmpeg cada 15 segundos. Una velocidad
+sostenida inferior a 1x indica que la salida no alcanza el tiempo real; puede
+ser por CPU insuficiente o por una entrada que entrega video lentamente.
+Comprueba tambien CPU en Render y errores HTTP de segmentos en el navegador.
+El reproductor reintenta fallos fatales de red hasta tres veces (1, 2 y 4 segundos),
+y restaura ese presupuesto cuando descarga un fragmento correctamente.
+
+Estos cambios requieren desplegar tanto video-bridge en Render como la pagina.
+Las pruebas automaticas verifican argumentos, transporte y recuperacion; no
+miden la velocidad real de FFmpeg ni garantizan la disponibilidad de la fuente.
