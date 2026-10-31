@@ -7,6 +7,7 @@ const path = require('node:path');
 function player(url, fields = {}) {
     const instances = [];
     const timers = new Map();
+    const directInstances = [];
     let timerId = 0;
     class Hls {
         static isSupported() { return true; }
@@ -28,13 +29,19 @@ function player(url, fields = {}) {
     } };
     const context = vm.createContext({ tvChannels: [{ url, ...fields }], tvHls: null, Hls, document,
         window: { location: { protocol: 'https:', href: 'https://player.example/' } },
+        DirectMpegts: {
+            isChannel: channel => channel.playbackType === 'mpegts',
+            create(video, source, callbacks) { const item = { source, video, callbacks,
+                start() { this.started = true; }, destroy() { this.destroyed = true; } };
+                directInstances.push(item); return item; }
+        },
         setTimeout(fn, delay) { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
         clearTimeout(id) { timers.delete(id); }, URL, API_BASE: '', updateTvVerticalPosition() {}, updateTvWatermarkAndEpg() {}, showToast() {} });
     const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
     const start = source.indexOf('function playTvChannel(index)');
     vm.runInContext(source.slice(start, source.indexOf('function updateTvWatermarkAndEpg', start)), context);
     context.playTvChannel(0);
-    return { instances, elements, timers, context };
+    return { instances, elements, timers, context, directInstances };
 }
 
 test('HTTP starts with HTTPS proxy, including later HLS requests', () => {
@@ -89,4 +96,14 @@ test('successful fragment restores the consecutive network retry budget', () => 
     hls.events.fragment();
     hls.events.error(null, { fatal: true, type: 'network' });
     assert.equal([...timers.values()][0].delay, 1000);
+});
+
+
+test('MPEG-TS uses the direct player and never sends its source to the HLS proxy', () => {
+    const { instances, directInstances, context } = player('http://181.78.79.131:8000/play/a0q9', { playbackType: 'mpegts', playbackMode: 'proxy' });
+    assert.equal(instances.length, 0);
+    assert.equal(directInstances[0].source, 'http://181.78.79.131:8000/play/a0q9');
+    assert.equal(directInstances[0].started, true);
+    context.playTvChannel(0);
+    assert.equal(directInstances[0].destroyed, true);
 });

@@ -5,7 +5,8 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "server": "node server/server.js"
+    "server": "node server/server.js",
+    "direct-player": "node scripts/serve-direct-player.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

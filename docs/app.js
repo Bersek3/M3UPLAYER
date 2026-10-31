@@ -169,12 +169,9 @@ function switchView(viewName) {
     // Pause TV video if switching away from live
     const tvVideo = document.getElementById('tv-main-video');
     if (viewName !== 'live') {
+        if (tvHls) { tvHls.destroy(); tvHls = null; }
         if (tvVideo && !tvVideo.paused) {
             tvVideo.pause();
-        }
-    } else {
-        if (tvVideo && tvVideo.paused && tvChannels.length > 0) {
-            tvVideo.play().catch(() => {});
         }
     }
 
@@ -491,7 +488,8 @@ function checkBrowserPlayback(channel, signal) {
         video.setAttribute('aria-hidden', 'true');
         document.body.appendChild(video);
         let player, timer, poll, finished = false;
-        let mode = window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
+        let mode = !directTs && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
         let firstTime = null;
         const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
         const finish = (playable, reason) => {
@@ -511,7 +509,7 @@ function checkBrowserPlayback(channel, signal) {
         const abort = () => finish(false, 'Análisis cancelado');
         function retry(reason) {
             if (finished) return;
-            if (mode === 'direct') {
+            if (mode === 'direct' && !directTs) {
                 mode = 'proxy';
                 safeStart();
             } else finish(false, reason);
@@ -530,6 +528,14 @@ function checkBrowserPlayback(channel, signal) {
             video.load();
             firstTime = null;
             timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            if (directTs) {
+                player = DirectMpegts.create(video, channel.url, {
+                    onError: message => finish(false, message),
+                    onAutoplayBlocked: () => finish(false, 'El navegador no permitió iniciar el video')
+                });
+                player.start();
+                return;
+            }
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                 player = new Hls({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 4,
                     maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 10,
@@ -1119,6 +1125,7 @@ function playTvChannel(index) {
     }
 
     const streamUrl = channel.url;
+    const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
     let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
     let recoveredMedia = false;
     let networkRetries = 0;
@@ -1138,6 +1145,16 @@ function playTvChannel(index) {
 
     function startPlayback() {
         if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (directTs) {
+            const player = DirectMpegts.create(video, streamUrl, {
+                onBuffering: value => bufferBadge.classList.toggle('hidden', !value),
+                onError: fail,
+                onAutoplayBlocked: () => showToast('Pulsa el video para iniciar la reproducción')
+            });
+            tvHls = player;
+            player.start();
+            return;
+        }
         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             const player = new Hls({
                 enableWorker: true,
