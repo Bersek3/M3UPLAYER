@@ -530,7 +530,8 @@ function checkBrowserPlayback(channel, signal) {
             firstTime = null;
             timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                player = new Hls({ enableWorker: true, maxBufferLength: 4, maxMaxBufferLength: 8, backBufferLength: 0,
+                player = new Hls({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 4,
+                    maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 10,
                     xhrSetup: (xhr, url) => {
                         if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
                             xhr.open('GET', proxyUrl(url), true);
@@ -1138,8 +1139,13 @@ function playTvChannel(index) {
         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             const player = new Hls({
                 enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 30,
+                // Favor continuity over minimum delay on variable IPTV connections.
+                lowLatencyMode: false,
+                liveSyncDurationCount: 4,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                maxBufferSize: 32 * 1024 * 1024,
+                backBufferLength: 10,
                 xhrSetup: (xhr, url) => {
                     if (usingProxy) {
                         const resolved = new URL(url, window.location.href);

@@ -17,6 +17,13 @@ function publicAddress(address) {
         (a === 203 && b === 0));
 }
 
+// Render permits larger high-bitrate segments than the serverless deployment.
+const renderTransport = process.env.RENDER === 'true';
+const maxResponseBytes = (renderTransport ? 24 : 4) * 1024 * 1024;
+const requestDeadlineMs = renderTransport ? 45000 : 18000;
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 8 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 8 });
+
 async function upstream(target, range, redirects = 0) {
     const url = new URL(target);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
@@ -32,6 +39,7 @@ async function upstream(target, range, redirects = 0) {
             // Pin the validated address; redirects are validated independently.
             lookup: (_name, _options, callback) => callback(null, chosen.address, chosen.family),
             family: chosen.family,
+            agent: url.protocol === 'https:' ? httpsAgent : httpAgent,
             autoSelectFamily: false,
             headers: { Accept: '*/*', 'Accept-Encoding': 'identity', 'User-Agent': 'M3UPlayer/1.0', ...(range ? { Range: range } : {}) }
         }, response => {
@@ -49,15 +57,15 @@ async function upstream(target, range, redirects = 0) {
             let size = 0;
             response.on('data', chunk => {
                 size += chunk.length;
-                // Stay below Vercel's response limit, including manifest rewriting.
-                if (size > 4 * 1024 * 1024) response.destroy(new Error('Fragmento demasiado grande para el proxy'));
+                // Bound memory per response, allowing larger segments on Render.
+                if (size > maxResponseBytes) response.destroy(new Error('Fragmento demasiado grande para el proxy'));
                 else chunks.push(chunk);
             });
             response.on('error', reject);
             response.on('end', () => resolve({ body: Buffer.concat(chunks), headers: response.headers, status: response.statusCode, url: url.href }));
         });
-        request.setTimeout(12000, () => request.destroy(new Error('Tiempo de espera agotado')));
-        const deadline = setTimeout(() => request.destroy(new Error('Tiempo de espera agotado')), 18000);
+        request.setTimeout(renderTransport ? 20000 : 12000, () => request.destroy(new Error('Tiempo de espera agotado')));
+        const deadline = setTimeout(() => request.destroy(new Error('Tiempo de espera agotado')), requestDeadlineMs);
         request.on('close', () => clearTimeout(deadline));
         request.on('error', reject);
     });
@@ -87,10 +95,10 @@ async function handler(req, res) {
     if (typeof req.query.url !== 'string') return res.status(400).json({ error: 'Falta la URL del video' });
     try {
         const result = await upstream(req.query.url, /^bytes=\d*-\d*$/.test(req.headers.range || '') ? req.headers.range : null);
-        const text = result.body.toString('utf8');
+        const text = result.body.subarray(0, 256).toString('utf8');
         if (text.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U')) {
             res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-            return res.status(200).send(rewriteManifest(text, result.url));
+            return res.status(200).send(rewriteManifest(result.body.toString('utf8'), result.url));
         }
         const type = result.headers['content-type'] || '';
         if (!/^(video\/|audio\/|application\/(octet-stream|mp4)|text\/vtt)/i.test(type)) {
