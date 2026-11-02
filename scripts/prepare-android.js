@@ -8,6 +8,7 @@ for (const stale of ['player.js', 'account.js', 'mobile.css', 'channels.json']) 
     if (fs.existsSync(file)) fs.unlinkSync(file);
 }
 // Package the same interface as the browser for mobile and Android TV.
-for (const file of ['index.html', 'app.js', 'style.css']) fs.copyFileSync(path.join(root, file), path.join(dest, file));
+for (const file of ['index.html', 'app.js', 'style.css', 'mp2-ts-loader.js', 'mp2-audio.js', 'avc-fields.js', 'direct-mpegts.js']) fs.copyFileSync(path.join(root, file), path.join(dest, file));
+fs.cpSync(path.join(root, 'vendor'), path.join(dest, 'vendor'), { recursive: true });
 fs.copyFileSync(path.join(root, 'hls.min.js'), path.join(dest, 'hls.min.js'));
 console.log('Android: interfaz compartida con navegador, móvil y Android TV.');

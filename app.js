@@ -169,12 +169,9 @@ function switchView(viewName) {
     // Pause TV video if switching away from live
     const tvVideo = document.getElementById('tv-main-video');
     if (viewName !== 'live') {
+        if (tvHls) { tvHls.destroy(); tvHls = null; }
         if (tvVideo && !tvVideo.paused) {
             tvVideo.pause();
-        }
-    } else {
-        if (tvVideo && tvVideo.paused && tvChannels.length > 0) {
-            tvVideo.play().catch(() => {});
         }
     }
 
@@ -491,7 +488,8 @@ function checkBrowserPlayback(channel, signal) {
         video.setAttribute('aria-hidden', 'true');
         document.body.appendChild(video);
         let player, timer, poll, finished = false;
-        let mode = window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
+        let mode = !directTs && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
         let firstTime = null;
         const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
         const finish = (playable, reason) => {
@@ -511,7 +509,7 @@ function checkBrowserPlayback(channel, signal) {
         const abort = () => finish(false, 'Análisis cancelado');
         function retry(reason) {
             if (finished) return;
-            if (mode === 'direct') {
+            if (mode === 'direct' && !directTs) {
                 mode = 'proxy';
                 safeStart();
             } else finish(false, reason);
@@ -530,8 +528,17 @@ function checkBrowserPlayback(channel, signal) {
             video.load();
             firstTime = null;
             timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            if (directTs) {
+                player = DirectMpegts.create(video, channel.url, {
+                    onError: message => finish(false, message),
+                    onAutoplayBlocked: () => finish(false, 'El navegador no permitió iniciar el video')
+                });
+                player.start();
+                return;
+            }
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                player = new Hls({ enableWorker: true, maxBufferLength: 4, maxMaxBufferLength: 8, backBufferLength: 0,
+                player = new Hls({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 4,
+                    maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 10,
                     xhrSetup: (xhr, url) => {
                         if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
                             xhr.open('GET', proxyUrl(url), true);
@@ -1156,8 +1163,11 @@ function playTvChannel(index) {
     }
 
     const streamUrl = channel.url;
+    const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
     let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
     let recoveredMedia = false;
+    let networkRetries = 0;
+    let retryTimer = null;
     const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
     video.pause();
     video.removeAttribute('src');
@@ -1173,11 +1183,30 @@ function playTvChannel(index) {
 
     function startPlayback() {
         if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (directTs) {
+            const player = DirectMpegts.create(video, streamUrl, {
+                onBuffering: value => bufferBadge.classList.toggle('hidden', !value),
+                onError: fail,
+                onAutoplayBlocked: () => showToast('Pulsa el video para iniciar la reproducción')
+            });
+            tvHls = player;
+            player.start();
+            return;
+        }
         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             const player = new Hls({
                 enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 30,
+                // Favor continuity over minimum delay on variable IPTV connections.
+                lowLatencyMode: false,
+                liveSyncDurationCount: 4,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                maxBufferSize: 32 * 1024 * 1024,
+                capLevelToPlayerSize: true,
+                capLevelOnFPSDrop: true,
+                abrBandWidthFactor: 0.8,
+                abrBandWidthUpFactor: 0.6,
+                backBufferLength: 10,
                 xhrSetup: (xhr, url) => {
                     if (usingProxy) {
                         const resolved = new URL(url, window.location.href);
@@ -1186,6 +1215,11 @@ function playTvChannel(index) {
                 }
             });
             tvHls = player;
+            const destroy = player.destroy.bind(player);
+            player.destroy = () => { clearTimeout(retryTimer); retryTimer = null; destroy(); };
+            player.on(Hls.Events.FRAG_LOADED, () => {
+                if (tvHls === player) networkRetries = 0;
+            });
             player.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (tvHls !== player) return;
                 video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
@@ -1196,6 +1230,15 @@ function playTvChannel(index) {
                     usingProxy = true;
                     showToast('Reintentando la señal mediante el servidor…');
                     startPlayback();
+                } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRetries < 3) {
+                    // Keep decoded media while retrying transient origin failures.
+                    if (retryTimer !== null) return;
+                    const delay = 1000 * Math.pow(2, networkRetries++);
+                    bufferBadge.classList.remove('hidden');
+                    retryTimer = setTimeout(() => {
+                        retryTimer = null;
+                        if (tvHls === player) player.startLoad();
+                    }, delay);
                 } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
                     recoveredMedia = true;
                     player.recoverMediaError();

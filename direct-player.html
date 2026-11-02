@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>M3U Player · Reproducción directa</title>
+    <style>
+        :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b0d14; color: #f3f4fa; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 32px 18px; }
+        main { max-width: 1000px; margin: auto; }
+        .brand { font-size: 15px; font-weight: 800; letter-spacing: .08em; }
+        .brand span { color: #ff5199; }
+        h1 { margin: 26px 0 10px; font-size: clamp(25px, 5vw, 38px); }
+        p { color: #b7bdd0; line-height: 1.6; }
+        .panel { margin-top: 24px; padding: 22px; border: 1px solid #292f41; border-radius: 16px; background: #131723; }
+        label { display: block; margin-bottom: 9px; font-size: 14px; font-weight: 600; }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; }
+        input { flex: 1 1 320px; min-width: 0; border: 1px solid #3d455d; border-radius: 8px; background: #0b0d14; color: inherit; padding: 12px; font: inherit; }
+        button { border: 1px solid #3d455d; border-radius: 8px; background: #252b3d; color: inherit; padding: 12px 18px; font: inherit; font-weight: 650; cursor: pointer; }
+        button[type="submit"] { background: #ed3c89; border-color: #ed3c89; }
+        button:disabled { opacity: .45; cursor: default; }
+        :focus-visible { outline: 3px solid #ff9ac5; outline-offset: 3px; }
+        video { width: 100%; aspect-ratio: 16 / 9; background: #000; display: block; margin-top: 20px; border-radius: 10px; }
+        .audio-controls { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+        .audio-controls label { margin: 0; }
+        .audio-controls input { flex: 0 1 220px; min-width: 80px; padding: 0; }
+        #direct-status { min-height: 24px; margin: 14px 0 0; color: #c6cce0; }
+        #direct-status[data-state="error"] { color: #ff9db6; }
+        .note { font-size: 13px; margin: 14px 0 0; }
+        code { color: #e0e5fa; overflow-wrap: anywhere; }
+    </style>
+    <script defer src="vendor/mpegts-1.8.2.min.js"></script>
+    <script defer src="vendor/mpg123-decoder-1.0.3.min.js" charset="UTF-8"></script>
+    <script defer src="mp2-ts-loader.js"></script>
+    <script defer src="mp2-audio.js"></script>
+    <script defer src="avc-fields.js"></script>
+    <script defer src="direct-mpegts.js"></script>
+    <script defer src="direct-player-page.js"></script>
+</head>
+<body>
+    <main>
+        <div class="brand">M3U<span>PLAYER</span></div>
+        <h1>Reproducción directa</h1>
+        <p>Prueba la señal MPEG-TS original en tu navegador, sin recodificarla ni enviarla a Render. Esta página no necesita una cuenta.</p>
+        <section class="panel" aria-label="Reproductor MPEG-TS">
+            <form id="direct-form">
+                <label for="direct-url">URL de la señal MPEG-TS</label>
+                <div class="controls">
+                    <input id="direct-url" name="url" type="url" value="http://181.78.79.131:8000/play/a0q9" required autocomplete="off" spellcheck="false">
+                    <button type="submit">Reproducir</button>
+                    <button id="direct-stop" type="button" disabled>Detener</button>
+                </div>
+            </form>
+            <video id="direct-video" controls playsinline preload="none" aria-label="Señal en directo"></video>
+            <div class="audio-controls">
+                <label for="direct-volume">Volumen</label>
+                <input id="direct-volume" type="range" min="0" max="100" value="100" aria-label="Volumen">
+                <button id="direct-mute" type="button" aria-pressed="false">Silenciar</button>
+            </div>
+            <p id="direct-status" role="status" aria-live="polite">Listo. Pulsa Reproducir para conectar con la señal.</p>
+            <p class="note">Para probar el enlace HTTP original, abre esta página desde <code>http://127.0.0.1:4173/direct-player.html</code>. En una página HTTPS, la señal también debe usar HTTPS y permitir CORS.</p>
+        </section>
+    </main>
+</body>
+</html>
