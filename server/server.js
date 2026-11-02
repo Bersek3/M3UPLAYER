@@ -731,7 +731,7 @@ app.get('*', (req, res) => {
 
 module.exports = app;
 
-if (require.main === module) app.listen(PORT, '0.0.0.0', () => {
+if (require.main === module) app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`====================================================`);
     console.log(`🚀 M3U Server & Web Portal running on:`);
     console.log(`👉 Local:   http://localhost:${PORT}`);

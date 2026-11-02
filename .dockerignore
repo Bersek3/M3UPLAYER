@@ -1,0 +1,7 @@
+**
+!video-bridge/
+!video-bridge/server.js
+!video-bridge/multi.js
+!video-bridge/Dockerfile.multi
+!playlists/
+!playlists/chile-sin-credenciales.m3u

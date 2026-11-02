@@ -1,0 +1,159 @@
+{
+  "checkedAt": "2026-11-02T20:50:27.777Z",
+  "scope": "Conversión del origen real a HLS, inspección de códecs y decodificación de cuatro segundos. No prueba la pantalla ni el audio de un dispositivo físico.",
+  "results": [
+    {
+      "id": "1893b0fda2407a7d8a50bb20",
+      "name": "13 C",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 720,
+          "height": 480
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "c55014add896e9fc907dc4d0",
+      "name": "CHV",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "5a1a8b7e746866ebe4c4ac0d",
+      "name": "Canal 13",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "9507442845d964237eb90223",
+      "name": "MEGA HD",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "84ba9a2c236db1e97be8a8ad",
+      "name": "TNT SPORTS",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 720,
+          "height": 480
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "8bf6ac528c4fbdb7ea5dfd39",
+      "name": "TNT Sports Premium SD",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "016667c33219c8c6aa38c298",
+      "name": "ViaX",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 720,
+          "height": 480
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "73f937509ba4d562efdbb631",
+      "name": "Zona Latina",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 720,
+          "height": 480
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "63b41c49fd881bba95cfdc3f",
+      "name": "CANAL 13 NACIONAL SIN TRANS",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 720,
+          "height": 480
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    }
+  ]
+}

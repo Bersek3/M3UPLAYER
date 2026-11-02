@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server/server.js",
     "server": "node server/server.js",
-    "direct-player": "node scripts/serve-direct-player.js"
+    "direct-player": "node scripts/serve-direct-player.js",
+    "compatible-player": "node scripts/start-compatible-player.js",
+    "video-bridge": "node video-bridge/multi.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

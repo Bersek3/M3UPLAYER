@@ -29,7 +29,7 @@ $key = Join-Path $toolRoot 'm3uplayer-personal.keystore'
 if (!(Test-Path -LiteralPath $key)) {
     Run-Checked "$jdkRoot/bin/keytool.exe" @('-genkeypair', '-keystore', $key, '-storepass', 'android', '-keypass', 'android', '-alias', 'm3uplayer', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000', '-dname', 'CN=M3U Player Personal')
 }
-$apk = Join-Path $projectRoot 'dist/M3U-Player-1.4.2.apk'
+$apk = Join-Path $projectRoot 'dist/M3U-Player-1.5.0.apk'
 Run-Checked "$buildTools/apksigner.bat" @('sign', '--ks', $key, '--ks-key-alias', 'm3uplayer', '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--out', $apk, "$build/aligned.apk")
 Run-Checked "$buildTools/apksigner.bat" @('verify', '--verbose', $apk)
 Run-Checked "$buildTools/aapt.exe" @('dump', 'badging', $apk)

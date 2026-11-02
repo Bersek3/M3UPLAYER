@@ -1,6 +1,6 @@
-# M3U Player Android 1.4.2
+# M3U Player Android 1.5.0
 
-APK: dist/M3U-Player-1.4.2.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 9.
+APK: dist/M3U-Player-1.5.0.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 10.
 
 La app comparte la interfaz del navegador. En movil abre el acceso con correo y contrasena en vertical. Tras validar la cuenta, carga los canales habilitados y abre automaticamente TV en vivo en horizontal. Android TV conserva la orientacion horizontal tambien durante el acceso.
 

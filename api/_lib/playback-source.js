@@ -1,6 +1,21 @@
 const TNT_SOURCE = 'http://181.78.79.131:8000/play/a0q9';
+const crypto = require('node:crypto');
+const bridgeSources = new Set(require('./bridge-sources.json'));
 
 function playbackSource(channel, env = process.env) {
+    if (env.M3U_PLAYBACK_BRIDGE_URL) {
+        try {
+            const source = new URL(channel.sourceUrl || channel.url).href;
+            const id = crypto.createHash('sha256').update(source).digest('hex').slice(0, 24);
+            const allowed = env.M3U_BRIDGE_SOURCE_IDS ? new Set(env.M3U_BRIDGE_SOURCE_IDS.split(',').map(value => value.trim())) : bridgeSources;
+            const base = new URL(env.M3U_PLAYBACK_BRIDGE_URL);
+            const local = base.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname);
+            if (allowed.has(id) && (base.protocol === 'https:' || local) && !base.username && !base.password && !base.search && !base.hash) {
+                return { ...channel, sourceUrl: source, url: base.href.replace(/\/$/, '') + '/live/' + id + '/index.m3u8',
+                    playbackMode: 'direct', playbackType: 'hls', playbackNotice: undefined };
+            }
+        } catch { /* Preserve the existing path when conversion is not configured correctly. */ }
+    }
     if (channel.url !== TNT_SOURCE && channel.sourceUrl !== TNT_SOURCE) {
         try {
             const url = new URL(channel.url);

@@ -1,0 +1,196 @@
+{
+  "checkedAt": "2026-11-02T20:47:37.998Z",
+  "scope": "Disponibilidad y formato de una muestra de cada enlace original con User-Agent VLC. No verifica decodificación ni continuidad.",
+  "results": [
+    {
+      "id": "1893b0fda2407a7d8a50bb20",
+      "name": "13 C",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "c55014add896e9fc907dc4d0",
+      "name": "CHV",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "038c660c1d313ce605dcfaa9",
+      "name": "CNN Chile",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "5a1a8b7e746866ebe4c4ac0d",
+      "name": "Canal 13",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "22e0a4ca3b4f565ca09dddda",
+      "name": "Canal 24 Horas",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "747d8b5c07774aaad8f8c8ec",
+      "name": "ETC",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "12e1ed903a6bc546fdad9feb",
+      "name": "La Red",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "9507442845d964237eb90223",
+      "name": "MEGA HD",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "02e740183b0f6781e198a643",
+      "name": "Mega",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "21b84d087a4f0607148494b8",
+      "name": "REC TV",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "84ba9a2c236db1e97be8a8ad",
+      "name": "TNT SPORTS",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "8bf6ac528c4fbdb7ea5dfd39",
+      "name": "TNT Sports Premium SD",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "39ea7670b176ed9677ab01df",
+      "name": "TV+",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "016667c33219c8c6aa38c298",
+      "name": "ViaX",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "73f937509ba4d562efdbb631",
+      "name": "Zona Latina",
+      "status": 200,
+      "contentType": "application/octet-stream",
+      "kind": "mpegts"
+    },
+    {
+      "id": "f666dced0147f9ec375696cf",
+      "name": "Chilevision",
+      "error": "ENOTFOUND"
+    },
+    {
+      "id": "91a957feb6a2732855c9b4c0",
+      "name": "TVN",
+      "status": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "ad10ee5fe750ca3e84cde06d",
+      "name": "Canal 13",
+      "status": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "50cbc6704e8670d4734b00f3",
+      "name": "Mega",
+      "status": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "63b41c49fd881bba95cfdc3f",
+      "name": "CANAL 13 NACIONAL SIN TRANS",
+      "status": 200,
+      "contentType": "application/vnd.apple.mpegURL",
+      "kind": "hls"
+    },
+    {
+      "id": "bd86bd9c3cbef344e9e37135",
+      "name": "CANAL 13 TRANS",
+      "status": 404,
+      "contentType": "text/html",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "84adc4f3299c2d9bcbcb782c",
+      "name": "TNT Sports (Opcion 1)",
+      "error": "ENOTFOUND"
+    },
+    {
+      "id": "6466005d98fec35d60851b6e",
+      "name": "TVChile",
+      "error": "ECONNREFUSED"
+    },
+    {
+      "id": "23c3dcddc1cf2deb817c127e",
+      "name": "CHILE: MEGA HD [fortv]",
+      "status": 444,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "f8b16d03be2f4d2644e42d94",
+      "name": "CHILE: CHILEVISION HD [fortv]",
+      "status": 444,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "545d86656c2537642b907e3f",
+      "name": "CHILE: 13I [fortv]",
+      "status": 444,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "1d3593c1c699f564abb4a4f7",
+      "name": "CHILE: TVN CHILE HD [fortv]",
+      "status": 444,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    },
+    {
+      "id": "571f2ed77d1bd56915bbec67",
+      "name": "CHILE: CNN CHILE HD [fortv]",
+      "status": 444,
+      "contentType": "text/html; charset=UTF-8",
+      "kind": "pagina-html"
+    }
+  ]
+}

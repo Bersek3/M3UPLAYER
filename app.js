@@ -1469,6 +1469,8 @@ function playTvChannel(index) {
         if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             const player = new Hls({
                 enableWorker: true,
+                // A cold conversion needs time to produce its first two HLS segments.
+                manifestLoadingTimeOut: 45000,
                 // Favor continuity over minimum delay on variable IPTV connections.
                 lowLatencyMode: false,
                 liveSyncDurationCount: 4,
