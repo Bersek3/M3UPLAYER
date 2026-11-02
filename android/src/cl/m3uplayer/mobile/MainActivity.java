@@ -1,11 +1,15 @@
 package cl.m3uplayer.mobile;
 
 import android.app.Activity;
+import android.app.UiModeManager;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.*;
 import android.widget.FrameLayout;
 import java.io.ByteArrayInputStream;
@@ -42,6 +46,12 @@ public class MainActivity extends Activity {
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        web.addJavascriptInterface(new Object() {
+            @JavascriptInterface public void setLiveMode(boolean live) {
+                runOnUiThread(() -> updateOrientation(live));
+            }
+        }, "AndroidApp");
+        updateOrientation(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
@@ -97,6 +107,16 @@ public class MainActivity extends Activity {
     private WebResourceResponse missing() {
         return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", null,
             new ByteArrayInputStream(new byte[0]));
+    }
+    private void updateOrientation(boolean live) {
+        if (live) {
+            InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (keyboard != null) keyboard.hideSoftInputFromWindow(web.getWindowToken(), 0);
+        }
+        UiModeManager mode = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+        boolean television = mode != null && mode.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
+        setRequestedOrientation(live || television ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     }
     private void closeFullscreen() {
         if (fullscreen == null) return;

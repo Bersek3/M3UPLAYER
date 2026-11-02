@@ -1,17 +1,23 @@
-# M3U Player Android 1.2.0
+# M3U Player Android 1.3.0
 
-APK: dist/M3U-Player-1.2.0.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 3.
+APK: dist/M3U-Player-1.3.0.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 4.
 
-Al abrir presenta un formulario de usuario/correo y contrasena para la cuenta existente de M3U Player. Usa POST /api/auth/login y GET /api/user/channels en https://m3u-player-one.vercel.app. Despues del acceso carga exclusivamente los canales de esa cuenta. Una cuenta vacia muestra un aviso, sin listas publicas de respaldo. Actualizar vuelve a consultar la cuenta; Cerrar sesion detiene el video y limpia el token y los canales de memoria.
+La app comparte la interfaz del navegador. En movil abre el acceso con correo y contrasena en vertical. Tras validar la cuenta, carga los canales habilitados y abre automaticamente TV en vivo en horizontal. Android TV conserva la orientacion horizontal tambien durante el acceso.
 
-Mantiene el reproductor horizontal inmersivo y la fila deslizable de canales. Tocar el video muestra u oculta controles. Pantalla completa los oculta. El token solo vive en memoria, la contrasena se borra del formulario despues del acceso y no se guarda. Una apertura nueva del proceso requiere iniciar sesion; volver desde segundo plano conserva la sesion en memoria. Una sesion expirada devuelve al formulario.
+Una sesion guardada se valida al abrir y pasa directamente a TV en vivo. Una sesion expirada regresa al formulario. La contrasena se borra al autenticar y no se guarda. El token se conserva en el almacenamiento de la app hasta cerrar sesion o expirar.
 
-Instalar el APK encima de 1.0.0 o 1.1.0: conserva el identificador y la clave de firma. Abrirlo desde Archivos y permitir instalar desde esa fuente si Android lo solicita.
+Usa POST /api/auth/login y GET /api/user/channels en https://m3u-player-one.vercel.app. Si la cuenta no tiene canales propios, consulta los canales publicos habilitados en /api/channels. Si no hay canales o falla la conexion, muestra el error con opcion de reintentar el acceso; no reproduce una lista fija de respaldo.
 
-Compilar con las herramientas locales de .android-tools:
+Los controles son iconos abajo a la derecha y se ocultan tras 3,5 segundos de inactividad. Se muestran al tocar, mover el cursor o pulsar el mando. El volumen se despliega al interactuar con su icono. El icono de salida cierra la sesion y vuelve al acceso vertical en movil.
+
+Instalar encima de la version anterior conserva el identificador y la firma.
+
+Compilar:
 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1
 
-Pruebas: node --test android/account.test.js. Cubren carga de canales personales, cuenta vacia, sesion expirada y cierre de sesion con respuestas simuladas. No se utilizan credenciales reales en las pruebas.
+Pruebas del flujo actual: node --test scripts/android-startup.test.js scripts/favorites.test.js scripts/player.test.js.
 
-Conservar .android-tools/m3uplayer-personal.keystore para futuras actualizaciones. Es una firma personal, excluida de Git, con password local android. No corresponde a una configuracion de publicacion en Play Store.
+Los archivos player.js, account.js y mobile.css son del reproductor Android anterior y no se empaquetan. El APK usa index.html, app.js y style.css de la raiz.
+
+Conservar .android-tools/m3uplayer-personal.keystore para futuras actualizaciones. La firma personal y las herramientas estan excluidas de Git.

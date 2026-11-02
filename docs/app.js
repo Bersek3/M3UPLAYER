@@ -7,6 +7,7 @@
 // - En Vercel: usa rutas relativas /api (mismo servidor, mismo dominio — sin CORS)
 // - En GitHub Pages o archivo local: apunta al dominio de Vercel donde están las funciones serverless
 const VERCEL_DOMAIN = 'https://m3u-player-one.vercel.app';
+const IS_ANDROID_APP = window.location.hostname === 'appassets.androidplatform.net';
 const API_BASE = (window.location.hostname.includes('github.io') || window.location.hostname === 'appassets.androidplatform.net' || window.location.protocol === 'file:')
     ? VERCEL_DOMAIN
     : ''; // En Vercel (vercel.app) o localhost: rutas relativas /api
@@ -63,7 +64,8 @@ function refreshTvFavorites() {
     tvChannels = orderedTvChannels(tvAllChannels, favorites, tvFavoritesOnly);
     currentTvIndex = tvPlayingChannel ? tvChannels.findIndex(ch => ch.url === tvPlayingChannel.url) : 0;
     const filter = document.getElementById('btn-tv-favorites');
-    filter.textContent = tvFavoritesOnly ? '★ Favoritos · Ver todos' : '☆ Ver favoritos';
+    filter.textContent = tvFavoritesOnly ? '★' : '☆';
+    filter.setAttribute('aria-label', tvFavoritesOnly ? 'Ver todos los canales' : 'Ver favoritos');
     filter.setAttribute('aria-pressed', String(tvFavoritesOnly));
     renderTvVerticalChannelsBar();
 }
@@ -104,12 +106,31 @@ const DEFAULT_FALLBACK_CHANNELS = [
 // ==========================================================================
 // INITIALIZATION
 // ==========================================================================
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     initNavbar();
     initAuthModal();
     initProfileView();
     initTvPlayer();
     initClock();
+
+    if (IS_ANDROID_APP) {
+        document.body.classList.add('android-app');
+        const email = document.getElementById('modal-username');
+        email.type = 'email';
+        email.placeholder = 'tu@correo.com';
+        email.previousElementSibling.textContent = 'Correo electrónico';
+        switchView('home');
+        openAuthModal('login');
+        if (currentUserToken) {
+            const submit = document.getElementById('btn-auth-submit');
+            submit.disabled = true;
+            submit.textContent = 'Cargando canales…';
+            try { await startAndroidLive(); }
+            catch (error) { showAuthError(error.message); }
+            finally { submit.disabled = false; submit.textContent = 'Iniciar sesión'; }
+        }
+        return;
+    }
 
     if (currentUserToken && currentUsername) {
         setAuthState(true, currentUsername);
@@ -156,6 +177,10 @@ function initNavbar() {
 
 function switchView(viewName) {
     currentView = viewName;
+    if (IS_ANDROID_APP) {
+        document.body.classList.toggle('android-live', viewName === 'live');
+        window.AndroidApp?.setLiveMode(viewName === 'live');
+    }
 
     // Toggle active panels
     document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active-view'));
@@ -207,8 +232,9 @@ function initAuthModal() {
         hideAuthAlerts();
 
         const username = document.getElementById('modal-username').value.trim();
-        const password = document.getElementById('modal-password').value.trim();
+        const password = document.getElementById('modal-password').value;
         const submitBtn = document.getElementById('btn-auth-submit');
+        if (submitBtn.disabled) return;
 
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span>Verificando en la nube...</span>';
@@ -238,6 +264,12 @@ function initAuthModal() {
             currentUsername = data.username;
             localStorage.setItem('m3u_web_token', currentUserToken);
             localStorage.setItem('m3u_web_user', currentUsername);
+            document.getElementById('modal-password').value = '';
+
+            if (IS_ANDROID_APP) {
+                await startAndroidLive();
+                return;
+            }
 
             showToast(`¡Bienvenido de vuelta, @${currentUsername}!`);
             closeAuthModal();
@@ -262,6 +294,7 @@ function initAuthModal() {
         setAuthState(false);
         showToast('Sesión cerrada correctamente');
         switchView('home');
+        if (IS_ANDROID_APP) openAuthModal('login');
     });
 }
 
@@ -273,15 +306,56 @@ function openAuthModal(mode = 'login') {
 }
 
 function closeAuthModal() {
+    if (IS_ANDROID_APP && currentView !== 'live') return;
     document.getElementById('modal-auth').classList.add('hidden');
     hideAuthAlerts();
+}
+
+// Validate saved sessions and fetch the enabled list before entering Android live TV.
+async function startAndroidLive() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+        const response = await fetch(`${API_BASE}/api/user/channels`, {
+            cache: 'no-store', signal: controller.signal,
+            headers: { Authorization: `Bearer ${currentUserToken}` }
+        });
+        if (response.status === 401 || response.status === 403) {
+            currentUserToken = null;
+            currentUsername = null;
+            localStorage.removeItem('m3u_web_token');
+            localStorage.removeItem('m3u_web_user');
+            throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
+        }
+        if (!response.ok) throw new Error('No se pudieron cargar tus canales. Intenta nuevamente.');
+        let data = await response.json();
+        if (!Array.isArray(data.channels)) throw new Error('La lista de canales no es válida.');
+        if (data.channels.length === 0) {
+            const publicResponse = await fetch(`${API_BASE}/api/channels`, { cache: 'no-store', signal: controller.signal });
+            if (!publicResponse.ok) throw new Error('No se pudieron cargar los canales habilitados.');
+            data = await publicResponse.json();
+        }
+        if (!Array.isArray(data.channels)) throw new Error('La lista de canales no es válida.');
+        const enabled = data.channels.filter(channel => channel && channel.enabled !== false && channel.disabled !== true &&
+            channel.active !== false && typeof channel.url === 'string' && /^https?:\/\//i.test(channel.url));
+        if (!enabled.length) throw new Error('No hay canales habilitados para reproducir. Intenta nuevamente más tarde.');
+        allUserChannels = enabled;
+        setAuthState(true, currentUsername);
+        await launchTvLiveMode(null, enabled);
+        closeAuthModal();
+    } catch (error) {
+        if (error.name === 'AbortError' || error instanceof TypeError) {
+            throw new Error('No se pudo conectar. Revisa internet e intenta nuevamente.');
+        }
+        throw error;
+    } finally { clearTimeout(timer); }
 }
 
 function setAuthModalMode(mode) {
     authModalMode = mode;
     const tabLogin = document.getElementById('tab-login-btn');
     const tabRegister = document.getElementById('tab-register-btn');
-    const label = document.getElementById('auth-btn-label');
+    const label = document.getElementById('auth-btn-label') || document.getElementById('btn-auth-submit');
     const sub = document.getElementById('auth-modal-subtitle');
 
     if (mode === 'login') {
@@ -877,7 +951,8 @@ function initTvVolume(video) {
         slider.value = percent;
         slider.setAttribute('aria-valuetext', `${percent}%${video.muted ? ', silenciado' : ''}`);
         level.textContent = video.muted ? '0%' : `${percent}%`;
-        mute.textContent = silent ? '🔇' : '🔊';
+        mute.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4L6 8H3v8h3l5 4z"/>' +
+            (silent ? '<path d="M16 9l5 6M21 9l-5 6"/>' : '<path d="M15 8a6 6 0 010 8M18 5a10 10 0 010 14"/>') + '</svg>';
         mute.setAttribute('aria-label', silent ? 'Activar sonido' : 'Silenciar');
         mute.setAttribute('aria-pressed', String(silent));
         try {
@@ -904,6 +979,7 @@ function initTvPlayer() {
     const video = document.getElementById('tv-main-video');
     initTvVolume(video);
     const btnExit = document.getElementById('btn-tv-exit-view');
+    if (IS_ANDROID_APP) btnExit.setAttribute('aria-label', 'Cerrar sesión');
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
     const btnFullscreen = document.getElementById('btn-tv-fullscreen');
     const wrapper = document.getElementById('tv-screen-wrapper');
@@ -947,6 +1023,10 @@ function initTvPlayer() {
     };
 
     btnExit.addEventListener('click', () => {
+        if (IS_ANDROID_APP) {
+            document.getElementById('btn-logout').click();
+            return;
+        }
         if (currentUserToken) {
             switchView('profile');
         } else {
@@ -1014,11 +1094,13 @@ function initTvPlayer() {
     });
 }
 
-async function launchTvLiveMode(targetChannel = null) {
+async function launchTvLiveMode(targetChannel = null, availableChannels = null) {
     switchView('live');
 
     // Use current user's channels if logged in, otherwise default channels
-    if (allUserChannels && allUserChannels.length > 0) {
+    if (Array.isArray(availableChannels)) {
+        tvChannels = availableChannels;
+    } else if (allUserChannels && allUserChannels.length > 0) {
         tvChannels = allUserChannels;
     } else {
         // Try fetching channels from backend
