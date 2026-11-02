@@ -24,10 +24,19 @@ const requestDeadlineMs = renderTransport ? 45000 : 18000;
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 8 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 8 });
 
-async function upstream(target, range, redirects = 0) {
+function proxyTarget(target) {
     const url = new URL(target);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
-        (url.port && !['80', '443'].includes(url.port))) throw new Error('URL no permitida');
+        (url.port && !['80', '443', '4000', '8000', '8080'].includes(url.port))) {
+        const error = new Error('Dirección o puerto de video no permitido');
+        error.code = 'SOURCE_POLICY';
+        throw error;
+    }
+    return url;
+}
+
+async function upstream(target, range, redirects = 0) {
+    const url = proxyTarget(target);
     const hostname = url.hostname.replace(/^\[|\]$/g, '');
     const addresses = net.isIP(hostname)
         ? [{ address: hostname, family: net.isIP(hostname) }]
@@ -51,7 +60,9 @@ async function upstream(target, range, redirects = 0) {
             }
             if (![200, 206].includes(response.statusCode)) {
                 response.resume();
-                return reject(new Error(`El origen respondió HTTP ${response.statusCode}`));
+                const error = new Error(`El origen respondió HTTP ${response.statusCode}`);
+                error.code = `SOURCE_HTTP_${response.statusCode}`;
+                return reject(error);
             }
             const chunks = [];
             let size = 0;
@@ -84,6 +95,15 @@ function rewriteManifest(text, base) {
     }).join('\n');
 }
 
+function rudoMediaSource(text, source) {
+    const page = new URL(source);
+    if (page.hostname !== 'rudo.video' || !/^\/live\/[a-z0-9_-]+\/?$/i.test(page.pathname)) return null;
+    const match = text.match(/\b(?:var|let|const)\s+streamURL\s*=\s*['"]([^'"\r\n]+)['"]/);
+    if (!match) return null;
+    // Read the declared source as data. Its destination is validated by upstream.
+    return proxyTarget(new URL(match[1], page).href).href;
+}
+
 async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Range');
@@ -94,7 +114,12 @@ async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).end();
     if (typeof req.query.url !== 'string') return res.status(400).json({ error: 'Falta la URL del video' });
     try {
-        const result = await upstream(req.query.url, /^bytes=\d*-\d*$/.test(req.headers.range || '') ? req.headers.range : null);
+        const range = /^bytes=\d*-\d*$/.test(req.headers.range || '') ? req.headers.range : null;
+        let result = await upstream(req.query.url, range);
+        if (/^text\/html/i.test(result.headers['content-type'] || '')) {
+            const source = rudoMediaSource(result.body.toString('utf8'), result.url);
+            if (source) result = await upstream(source, range);
+        }
         const text = result.body.subarray(0, 256).toString('utf8');
         if (text.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U')) {
             res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
@@ -102,7 +127,7 @@ async function handler(req, res) {
         }
         const type = result.headers['content-type'] || '';
         if (!/^(video\/|audio\/|application\/(octet-stream|mp4)|text\/vtt)/i.test(type)) {
-            return res.status(502).json({ error: 'El origen no devolvió un video compatible' });
+            return res.status(502).json({ error: 'El enlace devuelve una página o contenido que no es video. Necesitas la URL directa del manifiesto HLS.', code: 'SOURCE_NOT_VIDEO' });
         }
         res.setHeader('Content-Type', type);
         for (const name of ['content-range', 'accept-ranges']) {
@@ -110,8 +135,9 @@ async function handler(req, res) {
         }
         return res.status(result.status).send(result.body);
     } catch (error) {
-        return res.status(502).json({ error: error.message });
+        const code = error.code === 'ENOTFOUND' ? 'SOURCE_DNS' : error.code || 'SOURCE_NETWORK';
+        return res.status(502).json({ error: code === 'SOURCE_DNS' ? 'El dominio de la señal no se pudo resolver. El enlace puede estar desactualizado.' : error.message, code });
     }
 }
 
-module.exports = { handler, rewriteManifest, publicAddress };
+module.exports = { handler, rewriteManifest, publicAddress, proxyTarget, rudoMediaSource };

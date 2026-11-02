@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-11-02T20:27:02.401Z",
+  "scope": "Manifiestos HLS y muestra de un fragmento; sin prueba de decodificación o continuidad en navegador.",
+  "results": [
+    {
+      "name": "13C",
+      "url": "https://origin.dpsgo.com/ssai/event/GI-9cp_bT8KcerLpZwkuhw/master.m3u8",
+      "checked": true,
+      "sampleBytes": 32768,
+      "format": "mpegts",
+      "cors": "*"
+    },
+    {
+      "name": "Mega",
+      "url": "https://unlimited1-cl-isp.dps.live/mega/mega.smil/playlist.m3u8",
+      "checked": true,
+      "sampleBytes": 32768,
+      "format": "mpegts",
+      "cors": "*"
+    },
+    {
+      "name": "TVN",
+      "url": "https://iptv.bitred.cl/tvn/index.m3u8",
+      "checked": true,
+      "sampleBytes": 32768,
+      "format": "mpegts",
+      "cors": "*"
+    },
+    {
+      "name": "Canal 13",
+      "url": "http://181.78.8.199:8000/play/a0d4/index.m3u8",
+      "checked": true,
+      "sampleBytes": 32768,
+      "format": "mpegts",
+      "cors": "*"
+    },
+    {
+      "name": "Canal 13 (alternativa)",
+      "url": "http://181.78.8.199:8000/play/a0dj/index.m3u8",
+      "checked": false,
+      "reason": "HTTP 404"
+    }
+  ]
+}

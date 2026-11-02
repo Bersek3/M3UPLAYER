@@ -3,6 +3,10 @@
 
     function isChannel(channel) {
         if (channel.playbackType) return channel.playbackType === 'mpegts';
+        try {
+            const url = new URL(channel.url);
+            if (url.hostname === '181.78.79.131' && url.port === '8000' && /^\/play\/[^/]+\/?$/.test(url.pathname)) return true;
+        } catch { /* Fall through to extension detection. */ }
         return channel.url === 'http://181.78.79.131:8000/play/a0q9' || /\.ts(?:[?#]|$)/i.test(channel.url || '');
     }
 

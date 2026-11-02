@@ -71,6 +71,17 @@ test('network failure falls back to proxy, retries with backoff, then shows an e
     assert.ok(elements.get('tv-error-text').textContent);
 });
 
+test('confirmed invalid sources show their cause without repeated proxy requests', () => {
+    for (const code of ['SOURCE_DNS', 'SOURCE_NOT_VIDEO', 'SOURCE_POLICY', 'SOURCE_HTTP_401', 'SOURCE_HTTP_404']) {
+        const { instances, elements, timers } = player('http://cdn.example/live.m3u8');
+        instances[0].events.error(null, { fatal: true, type: 'network',
+            networkDetails: { responseText: JSON.stringify({ code, error: 'Causa del origen' }) } });
+        assert.equal(instances[0].stopped, true);
+        assert.equal(timers.size, 0);
+        assert.equal(elements.get('tv-error-text').textContent, 'Causa del origen');
+    }
+});
+
 test('unconfigured continuous video explains the required service without failing through the HLS proxy', () => {
     const notice = 'Configura TNT_SPORTS_HLS_URL';
     const { instances, elements } = player('http://181.78.79.131:8000/play/a0q9', { playbackNotice: notice });

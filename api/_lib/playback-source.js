@@ -1,7 +1,15 @@
 const TNT_SOURCE = 'http://181.78.79.131:8000/play/a0q9';
 
 function playbackSource(channel, env = process.env) {
-    if (channel.url !== TNT_SOURCE && channel.sourceUrl !== TNT_SOURCE) return channel;
+    if (channel.url !== TNT_SOURCE && channel.sourceUrl !== TNT_SOURCE) {
+        try {
+            const url = new URL(channel.url);
+            if (url.hostname === '181.78.79.131' && url.port === '8000' && /^\/play\/[^/]+\/?$/.test(url.pathname)) {
+                return { ...channel, playbackMode: 'direct', playbackType: 'mpegts' };
+            }
+        } catch { /* Invalid URLs are handled by the playback/import validation. */ }
+        return channel;
+    }
     // An existing bridge URL must not silently keep direct playback on Render.
     // Preserve the former HLS route only when deliberately selected.
     const configured = env.TNT_SPORTS_PLAYBACK === 'hls' && env.TNT_SPORTS_HLS_URL;

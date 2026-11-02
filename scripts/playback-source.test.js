@@ -2,6 +2,16 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { playbackSource, TNT_SOURCE } = require('../api/_lib/playback-source');
 
+test('bare provider endpoints use continuous MPEG-TS while actual HLS paths remain HLS', () => {
+    for (const id of ['a0pm', 'a0r0', 'a0qp']) {
+        const url = `http://181.78.79.131:8000/play/${id}`;
+        assert.equal(playbackSource({ url }, {}).playbackType, 'mpegts');
+        assert.equal(playbackSource({ url }, {}).url, url);
+    }
+    const hls = { url: 'http://181.78.8.199:8000/play/a0d4/index.m3u8' };
+    assert.equal(playbackSource(hls, {}), hls);
+});
+
 test('TNT uses MPEG-TS directly even when the former bridge URL is configured', () => {
     const channel = { name: 'TNT', url: TNT_SOURCE, playbackMode: 'proxy', playbackNotice: 'Old setup notice' };
     const mapped = playbackSource(channel, { TNT_SPORTS_HLS_URL: 'https://video.example/live/index.m3u8' });

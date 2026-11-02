@@ -1499,6 +1499,18 @@ function playTvChannel(index) {
             });
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
+                // Do not retry a confirmed bad URL, HTML page or expired authorization.
+                if (usingProxy) {
+                    try {
+                        const raw = data.networkDetails?.responseText || data.response?.data || data.response?.text;
+                        const detail = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        if (/^(SOURCE_POLICY|SOURCE_DNS|SOURCE_NOT_VIDEO|SOURCE_HTTP_(400|401|403|404|410))$/.test(detail?.code)) {
+                            player.stopLoad();
+                            fail(detail.error);
+                            return;
+                        }
+                    } catch { /* Non-JSON transport failures retain bounded network retries. */ }
+                }
                 if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy) {
                     usingProxy = true;
                     showToast('Reintentando la señal mediante el servidor…');

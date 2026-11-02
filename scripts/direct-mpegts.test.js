@@ -121,6 +121,14 @@ function fixture({ protocol = 'https:', supported = true, autoplayError, hybrid 
     };
 }
 
+test('all known bare provider endpoints are continuous TS, while explicit HLS stays HLS', () => {
+    const { api } = fixture();
+    assert.equal(api.isChannel({ url: 'http://181.78.79.131:8000/play/a0pm' }), true);
+    assert.equal(api.isChannel({ url: 'http://181.78.79.131:8000/play/a0r0' }), true);
+    assert.equal(api.isChannel({ url: 'http://181.78.8.199:8000/play/a0d4/index.m3u8' }), false);
+    assert.equal(api.isChannel({ url: 'http://181.78.79.131:8000/play/a0pm', playbackType: 'hls' }), false);
+});
+
 test('HTTPS page refuses HTTP source before constructing a transport, without proxy fallback', () => {
     const f = fixture();
     f.start('http://181.78.79.131:8000/play/a0q9');
