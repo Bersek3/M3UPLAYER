@@ -1,0 +1,13 @@
+#EXTM3U
+#EXTINF:0 group-title="Deportes",TNT SPORTS
+#EXTGRP:Deportes
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0mo
+#EXTINF:0 group-title="Deportes",TNT Sports Premium SD
+#EXTGRP:Deportes
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0q9
+#EXTINF:0 group-title="Deportes",TNT Sports (Opcion 1)
+#EXTGRP:Deportes
+#EXTVLCOPT:network-caching=1000
+https://smjt9q.envivoslatam.org/tntsports/tracks-v1a1/mono.m3u8?ip=181.163.94.50&token=14c985e51f0f63e2b946ba729a7f21571604aee6-38-1773308261-1773254261

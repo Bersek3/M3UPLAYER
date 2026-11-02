@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+android/build/
+dist/
 .android-tools/
 server/node_modules/
 package-lock.json

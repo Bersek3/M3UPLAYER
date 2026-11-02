@@ -7,7 +7,7 @@
 // - En Vercel: usa rutas relativas /api (mismo servidor, mismo dominio — sin CORS)
 // - En GitHub Pages o archivo local: apunta al dominio de Vercel donde están las funciones serverless
 const VERCEL_DOMAIN = 'https://m3u-player-one.vercel.app';
-const API_BASE = (window.location.hostname.includes('github.io') || window.location.protocol === 'file:')
+const API_BASE = (window.location.hostname.includes('github.io') || window.location.hostname === 'appassets.androidplatform.net' || window.location.protocol === 'file:')
     ? VERCEL_DOMAIN
     : ''; // En Vercel (vercel.app) o localhost: rutas relativas /api
 
@@ -900,6 +900,44 @@ function initTvPlayer() {
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
     const btnFullscreen = document.getElementById('btn-tv-fullscreen');
     const wrapper = document.getElementById('tv-screen-wrapper');
+    const toolbar = document.getElementById('tv-web-top-controls');
+    let toolbarTimer;
+    const revealToolbar = () => {
+        if (currentView !== 'live') return;
+        toolbar.classList.add('controls-visible');
+        clearTimeout(toolbarTimer);
+        toolbarTimer = setTimeout(() => {
+            toolbar.classList.remove('controls-visible');
+            if (toolbar.contains(document.activeElement)) document.activeElement.blur();
+        }, 3500);
+    };
+    wrapper.addEventListener('pointermove', revealToolbar);
+    wrapper.addEventListener('pointerdown', revealToolbar);
+    toolbar.addEventListener('focusin', revealToolbar);
+    toolbar.addEventListener('input', revealToolbar);
+    window.addEventListener('keydown', event => {
+        if (currentView !== 'live') return;
+        const wasHidden = !toolbar.classList.contains('controls-visible');
+        revealToolbar();
+        const buttons = Array.from(toolbar.querySelectorAll('button, input'));
+        const index = buttons.indexOf(document.activeElement);
+        if (event.key === 'ArrowRight' && index < 0) {
+            event.preventDefault(); buttons[0].focus();
+        } else if (index >= 0 && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus();
+        } else if (index >= 0 && event.key === 'ArrowLeft' && document.activeElement.tagName !== 'INPUT') {
+            event.preventDefault(); document.activeElement.blur();
+            showTvOverlayTemporarily();
+        } else if (wasHidden && event.key === 'Enter') {
+            event.preventDefault(); buttons[0].focus();
+        }
+    });
+    window.playerBack = () => {
+        if (currentView !== 'live') return false;
+        btnExit.click();
+        return true;
+    };
 
     btnExit.addEventListener('click', () => {
         if (currentUserToken) {
