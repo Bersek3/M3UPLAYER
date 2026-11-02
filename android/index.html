@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5.5.2">
+    <link rel="stylesheet" href="style.css?v=5.6.0">
     <script src="hls.min.js"></script>
     <script src="vendor/mpegts-1.8.2.min.js"></script>
     <script src="vendor/mpg123-decoder-1.0.3.min.js" charset="UTF-8"></script>
@@ -254,7 +254,11 @@
                 
                 <!-- FULLSCREEN VIDEO CONTAINER -->
                 <div class="tv-video-container" id="tv-video-container">
-                    <video id="tv-main-video" autoplay playsinline></video>
+                    <div class="tv-video-placeholder" aria-hidden="true">
+                        <span class="tv-player-wordmark">M3U <b>PLAYER</b></span>
+                        <span id="tv-player-channel-name"></span>
+                    </div>
+                    <video id="tv-main-video" autoplay playsinline disablepictureinpicture disableremoteplayback poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Cpath fill='%23080b12' d='M0 0h16v9H0z'/%3E%3C/svg%3E"></video>
                 </div>
 
                 <!-- VIDEO VIGNETTE OVERLAY FOR TV READABILITY -->
@@ -279,6 +283,7 @@
 
                 <!-- TOP BAR CONTROLS FOR WEB (Fullscreen, Toggle UI, Volver al Perfil) -->
                 <div class="tv-web-top-controls" id="tv-web-top-controls">
+                    <button class="btn-tv-ctrl" id="btn-tv-play" type="button" aria-label="Reproducir"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 5l11 7-11 7z"/></svg></button>
                     <div class="tv-volume-control" role="group" aria-label="Control de audio">
                         <button class="btn-tv-ctrl" id="btn-tv-mute" type="button" aria-label="Silenciar" aria-pressed="false">🔊</button>
                         <label for="tv-volume">Volumen</label>
@@ -387,6 +392,6 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast-notify" class="toast-popup hidden"></div>
 
-    <script src="app.js?v=5.5.2"></script>
+    <script src="app.js?v=5.6.0"></script>
 </body>
 </html>

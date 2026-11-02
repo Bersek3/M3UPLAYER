@@ -975,8 +975,42 @@ function initTvVolume(video) {
     update();
 }
 
+function initTvPlaybackUi(video) {
+    const container = document.getElementById('tv-video-container');
+    const play = document.getElementById('btn-tv-play');
+    const buffer = document.getElementById('tv-player-buffering');
+    video.controls = false;
+    const update = () => {
+        const paused = video.paused;
+        play.setAttribute('aria-label', paused ? 'Reproducir' : 'Pausar');
+        play.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7">' +
+            (paused ? '<path d="M8 5l11 7-11 7z"/>' : '<path d="M8 5v14M16 5v14"/>') + '</svg>';
+    };
+    const ready = () => { container.classList.add('has-video-frame'); update(); };
+    video.addEventListener('loadeddata', ready);
+    video.addEventListener('playing', ready);
+    video.addEventListener('pause', update);
+    video.addEventListener('emptied', () => { container.classList.remove('has-video-frame'); update(); });
+    play.addEventListener('click', async () => {
+        if (!document.getElementById('tv-player-error').classList.contains('hidden')) {
+            playTvChannel(currentTvIndex);
+            return;
+        }
+        if (video.paused) {
+            try { await video.play(); }
+            catch { buffer.classList.add('hidden'); showToast('No se pudo iniciar la señal. Intenta nuevamente.'); }
+        } else {
+            video.pause();
+            buffer.classList.add('hidden');
+        }
+        update();
+    });
+    update();
+}
+
 function initTvPlayer() {
     const video = document.getElementById('tv-main-video');
+    initTvPlaybackUi(video);
     initTvVolume(video);
     initTvChannelScroll();
     const btnExit = document.getElementById('btn-tv-exit-view');
@@ -1298,13 +1332,20 @@ function playTvChannel(index) {
         showToast(message);
     }
 
+    function autoplayBlocked(error) {
+        if (error?.name === 'AbortError' || tvPlayingChannel !== channel) return;
+        bufferBadge.classList.add('hidden');
+        document.getElementById('tv-web-top-controls').classList.add('controls-visible');
+        showToast('Pulsa reproducir en la barra de controles para iniciar la señal');
+    }
+
     function startPlayback() {
         if (tvHls) { tvHls.destroy(); tvHls = null; }
         if (directTs) {
             const player = DirectMpegts.create(video, streamUrl, {
                 onBuffering: value => bufferBadge.classList.toggle('hidden', !value),
                 onError: fail,
-                onAutoplayBlocked: () => showToast('Pulsa el video para iniciar la reproducción')
+                onAutoplayBlocked: autoplayBlocked
             });
             tvHls = player;
             player.start();
@@ -1339,7 +1380,7 @@ function playTvChannel(index) {
             });
             player.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (tvHls !== player) return;
-                video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+                video.play().catch(autoplayBlocked);
             });
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
@@ -1376,7 +1417,7 @@ function playTvChannel(index) {
                 } else fail('No se pudo reproducir esta señal en el navegador. Prueba abrirla en VLC.');
             };
             video.src = usingProxy ? proxyUrl(streamUrl) : streamUrl;
-            video.play().catch(() => showToast('Pulsa el video para iniciar la reproducción'));
+            video.play().catch(autoplayBlocked);
         } else {
             fail('Este navegador no admite la reproducción HLS. Prueba con otro navegador o VLC.');
         }
@@ -1389,6 +1430,7 @@ function playTvChannel(index) {
 }
 
 function updateTvWatermarkAndEpg(channel) {
+    document.getElementById('tv-player-channel-name').textContent = channel.name || '';
     // Watermark
     const watermark = document.getElementById('tv-watermark-img');
     if (usableLogo(channel.logo)) {

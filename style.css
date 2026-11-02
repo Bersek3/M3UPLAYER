@@ -1009,10 +1009,32 @@ html, body {
 #tv-main-video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
     background: #000000;
+    position: relative;
+    opacity: 0;
+    transition: opacity .2s ease;
 }
+.tv-video-container.has-video-frame #tv-main-video { opacity: 1; }
+#tv-main-video::-webkit-media-controls,
+#tv-main-video::-webkit-media-controls-enclosure,
+#tv-main-video::-webkit-media-controls-overlay-play-button,
+#tv-main-video::-webkit-media-controls-start-playback-button { display: none !important; }
+.tv-video-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 30px;
+    background: radial-gradient(ellipse at 80% 100%, #38152a 0%, #101624 42%, #080b12 80%);
+    pointer-events: none;
+}
+.has-video-frame .tv-video-placeholder { visibility: hidden; }
+.tv-player-wordmark { font-size: 13px; letter-spacing: 3px; color: #fff; }
+.tv-player-wordmark b { color: #f472b6; font-weight: 600; }
+#tv-player-channel-name { font-size: 12px; color: #a6b0c3; }
 
 .tv-vignette-overlay {
     position: absolute;
@@ -1058,25 +1080,26 @@ html, body {
 /* Buffering & Error */
 .tv-buffering-badge {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    bottom: 70px;
+    left: 28px;
     z-index: 20;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 14px;
-    background: rgba(10, 14, 22, 0.92);
-    padding: 22px 34px;
-    border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    gap: 10px;
+    background: rgba(10, 14, 22, 0.8);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 12px;
+    pointer-events: none;
+    border: 1px solid rgba(244, 114, 182, 0.18);
 }
 
 .tv-spinner {
-    width: 44px;
-    height: 44px;
-    border: 4px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #ffffff;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #f472b6;
     border-radius: 50%;
     animation: tv-spin 0.8s linear infinite;
 }

@@ -1,6 +1,7 @@
 package cl.m3uplayer.mobile;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
 import android.app.UiModeManager;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
@@ -81,6 +82,9 @@ public class MainActivity extends Activity {
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            @Override public Bitmap getDefaultVideoPoster() {
+                return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
