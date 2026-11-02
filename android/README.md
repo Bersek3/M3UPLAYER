@@ -1,12 +1,14 @@
-# M3U Player Android 1.3.0
+# M3U Player Android 1.3.1
 
-APK: dist/M3U-Player-1.3.0.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 4.
+APK: dist/M3U-Player-1.3.1.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 5.
 
 La app comparte la interfaz del navegador. En movil abre el acceso con correo y contrasena en vertical. Tras validar la cuenta, carga los canales habilitados y abre automaticamente TV en vivo en horizontal. Android TV conserva la orientacion horizontal tambien durante el acceso.
 
 Una sesion guardada se valida al abrir y pasa directamente a TV en vivo. Una sesion expirada regresa al formulario. La contrasena se borra al autenticar y no se guarda. El token se conserva en el almacenamiento de la app hasta cerrar sesion o expirar.
 
 Usa POST /api/auth/login y GET /api/user/channels en https://m3u-player-one.vercel.app. Si la cuenta no tiene canales propios, consulta los canales publicos habilitados en /api/channels. Si no hay canales o falla la conexion, muestra el error con opcion de reintentar el acceso; no reproduce una lista fija de respaldo.
+
+La lista vertical de canales permite deslizar con inercia dentro de su propio sector. El gesto recorre la lista sin cambiar la reproduccion; tocar un recuadro selecciona ese canal. El menu permanece visible durante el gesto y el desplazamiento.
 
 Los controles son iconos abajo a la derecha y se ocultan tras 3,5 segundos de inactividad. Se muestran al tocar, mover el cursor o pulsar el mando. El volumen se despliega al interactuar con su icono. El icono de salida cierra la sesion y vuelve al acceso vertical en movil.
 

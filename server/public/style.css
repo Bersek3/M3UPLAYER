@@ -1626,6 +1626,22 @@ html, body {
 .android-app .auth-modal-card { margin: auto; max-width: 400px; width: 100%; }
 .android-app #view-live { height: 100dvh; }
 .android-app .main-viewport { min-height: 100dvh; }
+.android-app .tv-vertical-channels-bar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    scrollbar-width: none;
+}
+.android-app .tv-vertical-channels-bar::-webkit-scrollbar { display: none; }
+.android-app .tv-channels-scroll-list {
+    position: relative;
+    padding: 24px 0;
+    transform: none;
+    transition: none;
+}
+.android-app .channel-nav-item { flex-shrink: 0; }
+.tv-main-overlay.faded-out .tv-vertical-channels-bar { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tv-web-top-controls { transition: none; } }
 @media (max-width: 900px) {
     .features-bento {

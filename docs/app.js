@@ -978,6 +978,7 @@ function initTvVolume(video) {
 function initTvPlayer() {
     const video = document.getElementById('tv-main-video');
     initTvVolume(video);
+    initTvChannelScroll();
     const btnExit = document.getElementById('btn-tv-exit-view');
     if (IS_ANDROID_APP) btnExit.setAttribute('aria-label', 'Cerrar sesión');
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
@@ -1199,6 +1200,31 @@ function renderTvVerticalChannelsBar() {
     updateTvVerticalPosition();
 }
 
+function initTvChannelScroll() {
+    if (!IS_ANDROID_APP) return;
+    const bar = document.getElementById('tv-vertical-bar');
+    let interacting = false;
+    bar.addEventListener('scroll', () => {
+        showTvOverlayTemporarily();
+        if (interacting) clearTimeout(tvOverlayTimeout);
+    }, { passive: true });
+    bar.addEventListener('pointerdown', () => {
+        interacting = true;
+        showTvOverlayTemporarily();
+        clearTimeout(tvOverlayTimeout);
+    }, { passive: true });
+    const finish = () => {
+        if (!interacting) return;
+        interacting = false;
+        showTvOverlayTemporarily();
+    };
+    window.addEventListener('pointerup', finish, { passive: true });
+    window.addEventListener('pointercancel', finish, { passive: true });
+    window.addEventListener('resize', () => {
+        if (currentView === 'live') updateTvVerticalPosition();
+    });
+}
+
 function updateTvVerticalPosition() {
     const list = document.getElementById('tv-channels-scroll-list');
     const items = list.querySelectorAll('.channel-nav-item');
@@ -1210,6 +1236,15 @@ function updateTvVerticalPosition() {
 
     const activeItem = items[currentTvIndex];
     if (activeItem) {
+        if (IS_ANDROID_APP) {
+            const bar = document.getElementById('tv-vertical-bar');
+            list.style.transform = 'none';
+            bar.scrollTo({
+                top: Math.max(0, activeItem.offsetTop + activeItem.offsetHeight / 2 - bar.clientHeight / 2),
+                behavior: 'smooth'
+            });
+            return;
+        }
         const center = (window.innerHeight - 72) / 2;
         const itemCenter = activeItem.offsetTop + (activeItem.offsetHeight / 2);
         const offset = center - itemCenter;
