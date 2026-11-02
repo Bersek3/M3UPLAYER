@@ -1403,16 +1403,6 @@ function updateTvWatermarkAndEpg(channel) {
     // Dynamic realistic EPG Program names
     const now = new Date();
     const currentHour = now.getHours();
-    const currentMins = now.getMinutes();
-    const remainingMins = 60 - currentMins;
-
-    document.getElementById('tv-epg-title-current').textContent = getDynamicProgramTitle(channel.name, currentHour);
-    document.getElementById('tv-epg-sub-current').textContent = `En vivo por ${channel.name}`;
-    document.getElementById('tv-epg-time-left').textContent = `Quedan ${remainingMins} min`;
-
-    const progressFill = document.getElementById('tv-epg-progress-fill');
-    if (progressFill) progressFill.style.width = `${Math.round((currentMins / 60) * 100)}%`;
-
     const nextHour = (currentHour + 1) % 24;
     document.getElementById('tv-epg-title-next').textContent = getDynamicProgramTitle(channel.name, nextHour);
     document.getElementById('tv-epg-upcoming-time').textContent = `Comienza a las ${String(nextHour).padStart(2, '0')}:00`;

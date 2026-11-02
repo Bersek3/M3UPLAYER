@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5.5.1">
+    <link rel="stylesheet" href="style.css?v=5.5.2">
     <script src="hls.min.js"></script>
     <script src="vendor/mpegts-1.8.2.min.js"></script>
     <script src="vendor/mpg123-decoder-1.0.3.min.js" charset="UTF-8"></script>
@@ -309,21 +309,6 @@
 
                         <!-- FLOATING EPG CARDS ROW -->
                         <div class="tv-epg-cards-container" id="tv-epg-container">
-                            <!-- Card 1: EN VIVO -->
-                            <div class="tv-epg-card tv-epg-live" id="tv-card-current">
-                                <div class="tv-epg-header">
-                                    <span class="tv-badge-live">En vivo</span>
-                                    <span class="tv-badge-time-left" id="tv-epg-time-left">Quedan 43 min</span>
-                                </div>
-                                <div class="tv-epg-footer">
-                                    <h3 class="tv-epg-title" id="tv-epg-title-current">Programa En Vivo</h3>
-                                    <p class="tv-epg-subtitle" id="tv-epg-sub-current">Transmisión en directo</p>
-                                    <div class="tv-epg-progress-bar">
-                                        <div class="tv-epg-progress-fill" id="tv-epg-progress-fill" style="width: 55%;"></div>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Card 2: PRÓXIMO PROGRAMA -->
                             <div class="tv-epg-card tv-epg-next" id="tv-card-next">
                                 <div class="tv-epg-header">
@@ -402,6 +387,6 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast-notify" class="toast-popup hidden"></div>
 
-    <script src="app.js?v=5.5.1"></script>
+    <script src="app.js?v=5.5.2"></script>
 </body>
 </html>
