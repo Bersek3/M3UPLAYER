@@ -153,7 +153,10 @@ function initNavbar() {
     });
 
     document.getElementById('nav-btn-home').addEventListener('click', () => switchView('home'));
-    document.getElementById('nav-btn-profile').addEventListener('click', () => switchView('profile'));
+    document.getElementById('nav-btn-profile').addEventListener('click', () => {
+        switchView('profile');
+        loadUserData();
+    });
     document.getElementById('nav-btn-live').addEventListener('click', () => launchTvLiveMode());
 
     const heroProfileBtn = document.getElementById('btn-hero-profile-cta');
@@ -290,7 +293,10 @@ function initAuthModal() {
         localStorage.removeItem('m3u_web_user');
         currentUserToken = null;
         currentUsername = null;
-        allUserChannels = [];
+        ++userDataRevision;
+        userPlaylists = [];
+        renderUserPlaylists([]);
+        reconcileAccountChannels([]);
         setAuthState(false);
         showToast('Sesión cerrada correctamente');
         switchView('home');
@@ -330,11 +336,6 @@ async function startAndroidLive() {
         if (!response.ok) throw new Error('No se pudieron cargar tus canales. Intenta nuevamente.');
         let data = await response.json();
         if (!Array.isArray(data.channels)) throw new Error('La lista de canales no es válida.');
-        if (data.channels.length === 0) {
-            const publicResponse = await fetch(`${API_BASE}/api/channels`, { cache: 'no-store', signal: controller.signal });
-            if (!publicResponse.ok) throw new Error('No se pudieron cargar los canales habilitados.');
-            data = await publicResponse.json();
-        }
         if (!Array.isArray(data.channels)) throw new Error('La lista de canales no es válida.');
         const enabled = data.channels.filter(channel => channel && channel.enabled !== false && channel.disabled !== true &&
             channel.active !== false && typeof channel.url === 'string' && /^https?:\/\//i.test(channel.url));
@@ -716,10 +717,90 @@ function showPlaylistFeedback(msg, type) {
     playlistFeedbackTimer = setTimeout(() => box.classList.add('hidden'), 7000);
 }
 
+function stopAccountPlayback() {
+    if (tvHls) { tvHls.destroy(); tvHls = null; }
+    const video = document.getElementById('tv-main-video');
+    video.onplaying = null;
+    video.onwaiting = null;
+    video.onerror = null;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    document.getElementById('tv-player-buffering').classList.add('hidden');
+    document.getElementById('tv-watermark-img').classList.add('hidden');
+    document.getElementById('tv-player-channel-name').textContent = '';
+    document.getElementById('tv-epg-title-next').textContent = '';
+    document.getElementById('tv-epg-upcoming-time').textContent = '';
+}
+
+function showAccountEmptyState(message = 'No tienes canales habilitados. Añade una lista para ver TV en vivo.') {
+    document.getElementById('tv-error-text').textContent = message;
+    document.getElementById('tv-player-error').classList.remove('hidden');
+}
+
+function reconcileAccountChannels(channels) {
+    const previous = tvPlayingChannel;
+    allUserChannels = channels.filter(channel => channel && channel.enabled !== false && channel.disabled !== true && channel.active !== false);
+    if (activeProfileCategory !== 'ALL' && !allUserChannels.some(channel => channel.group === activeProfileCategory)) activeProfileCategory = 'ALL';
+    const validFavorites = new Set(allUserChannels.map(channelFavoriteKey));
+    const favorites = readTvFavorites();
+    const kept = [...favorites].filter(key => validFavorites.has(key));
+    if (currentUserToken && kept.length !== favorites.size) {
+        try { localStorage.setItem('m3u_favorites:' + (currentUsername || 'guest'), JSON.stringify(kept)); }
+        catch { /* Deleted channels are still removed from the live list. */ }
+    }
+    tvAllChannels = allUserChannels.slice();
+    tvPlayingChannel = previous ? allUserChannels.find(channel => channel.url === previous.url) || null : null;
+    refreshTvFavorites();
+    if (!tvPlayingChannel) {
+        stopAccountPlayback();
+        if (currentView === 'live') {
+            if (tvChannels.length) playTvChannel(0);
+            else showAccountEmptyState();
+        }
+    }
+    document.getElementById('profile-total-channels-badge').textContent = allUserChannels.length;
+    document.getElementById('profile-channels-tab-count').textContent = allUserChannels.length;
+    renderProfileCategories();
+    filterProfileChannels();
+}
+
+let liveSyncInFlight = false;
+async function refreshLiveAccountChannels() {
+    if (!currentUserToken || currentView !== 'live' || document.hidden || liveSyncInFlight || pendingPlaylistDeletes.size) return;
+    const token = currentUserToken, revision = userDataRevision;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    liveSyncInFlight = true;
+    try {
+        const response = await fetch(`${API_BASE}/api/user/channels`, {
+            cache: 'no-store', signal: controller.signal, headers: { Authorization: `Bearer ${token}` }
+        });
+        if (token !== currentUserToken || revision !== userDataRevision) return;
+        if (response.status === 401 || response.status === 403) {
+            document.getElementById('btn-logout').click();
+            return;
+        }
+        if (!response.ok) return;
+        const data = await response.json();
+        if (token !== currentUserToken || revision !== userDataRevision || !Array.isArray(data.channels)) return;
+        const channels = data.channels.filter(channel => channel && channel.enabled !== false && channel.disabled !== true && channel.active !== false);
+        if (JSON.stringify(channels) !== JSON.stringify(allUserChannels)) reconcileAccountChannels(channels);
+    } catch { /* A temporary network failure does not discard the last confirmed list. */ }
+    finally { clearTimeout(timer); liveSyncInFlight = false; }
+}
+
+function initAccountChannelSync() {
+    setInterval(refreshLiveAccountChannels, 30000);
+    window.addEventListener('focus', refreshLiveAccountChannels);
+    document.addEventListener('visibilitychange', refreshLiveAccountChannels);
+}
+
 // Load playlists & channels for the authenticated user
 async function loadUserData() {
     if (!currentUserToken) return;
     const revision = ++userDataRevision;
+    const token = currentUserToken;
 
     try {
         // 1. Fetch user playlists
@@ -747,18 +828,9 @@ async function loadUserData() {
         if (chRes.ok) {
             const chData = await chRes.json();
             if (revision !== userDataRevision) return;
-            allUserChannels = chData.channels || [];
-            
-            // If user has 0 channels uploaded yet, load public/default channels so they can see channels immediately
-            if (allUserChannels.length === 0) {
-                const pubRes = await fetch(`${API_BASE}/api/channels`);
-                if (pubRes.ok) {
-                    const pubData = await pubRes.json();
-                    if (pubData.channels && pubData.channels.length > 0) {
-                        allUserChannels = pubData.channels;
-                    }
-                }
-            }
+            if (token !== currentUserToken) return;
+            if (!Array.isArray(chData.channels)) throw new Error('La lista de canales no es válida.');
+            reconcileAccountChannels(chData.channels);
         }
 
         if (revision !== userDataRevision) return;
@@ -802,6 +874,7 @@ function renderUserPlaylists(playlists) {
             const id = String(pl.id || pl._id);
             if (pendingPlaylistDeletes.has(id)) return;
             if (!confirm(`¿Eliminar la lista "${pl.name}"?`)) return;
+            const token = currentUserToken;
             pendingPlaylistDeletes.add(id);
             ++userDataRevision;
             const index = userPlaylists.findIndex(entry => String(entry.id || entry._id) === id);
@@ -814,13 +887,21 @@ function renderUserPlaylists(playlists) {
                     headers: { 'Authorization': `Bearer ${currentUserToken}` }
                 });
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok || data.error) throw new Error(data.error || 'No se pudo eliminar la lista. Intenta nuevamente.');
+                if (token !== currentUserToken) return;
+                if (res.status !== 404 && (!res.ok || data.error)) throw new Error(data.error || 'No se pudo eliminar la lista. Intenta nuevamente.');
                 ++userDataRevision;
                 userPlaylists = userPlaylists.filter(entry => String(entry.id || entry._id) !== id);
+                // Remove locally before refreshing, even if the subsequent request fails.
+                reconcileAccountChannels(allUserChannels.filter(channel => channel.playlistId && String(channel.playlistId) !== id));
+                renderProfileCategories();
+                filterProfileChannels();
+                document.getElementById('profile-total-channels-badge').textContent = allUserChannels.length;
+                document.getElementById('profile-channels-tab-count').textContent = allUserChannels.length;
                 renderUserPlaylists(userPlaylists);
                 showPlaylistFeedback('Lista eliminada correctamente.', 'success');
                 showToast('Lista eliminada correctamente');
             } catch (e) {
+                if (token !== currentUserToken) return;
                 ++userDataRevision;
                 if (!userPlaylists.some(entry => String(entry.id || entry._id) === id)) {
                     userPlaylists.splice(Math.max(0, index), 0, pl);
@@ -830,7 +911,7 @@ function renderUserPlaylists(playlists) {
                 showToast('No se pudo eliminar la lista');
             } finally {
                 pendingPlaylistDeletes.delete(id);
-                if (pendingPlaylistDeletes.size === 0) await loadUserData();
+                if (token === currentUserToken && pendingPlaylistDeletes.size === 0) await loadUserData();
             }
         });
 
@@ -1013,6 +1094,7 @@ function initTvPlayer() {
     initTvPlaybackUi(video);
     initTvVolume(video);
     initTvChannelScroll();
+    initAccountChannelSync();
     const btnExit = document.getElementById('btn-tv-exit-view');
     if (IS_ANDROID_APP) btnExit.setAttribute('aria-label', 'Cerrar sesión');
     const btnToggleMenu = document.getElementById('btn-tv-toggle-menu');
@@ -1064,6 +1146,7 @@ function initTvPlayer() {
         }
         if (currentUserToken) {
             switchView('profile');
+            loadUserData();
         } else {
             switchView('home');
         }
@@ -1132,6 +1215,34 @@ function initTvPlayer() {
 async function launchTvLiveMode(targetChannel = null, availableChannels = null) {
     switchView('live');
 
+    if (currentUserToken && !Array.isArray(availableChannels)) {
+        const token = currentUserToken;
+        const revision = userDataRevision;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        try {
+            const response = await fetch(`${API_BASE}/api/user/channels`, {
+                cache: 'no-store', signal: controller.signal, headers: { Authorization: `Bearer ${token}` }
+            });
+            if (token !== currentUserToken || revision !== userDataRevision) return;
+            if (!response.ok) throw new Error('No se pudieron actualizar los canales.');
+            const data = await response.json();
+            if (token !== currentUserToken || revision !== userDataRevision) return;
+            if (!Array.isArray(data.channels)) throw new Error('La lista de canales no es válida.');
+            availableChannels = data.channels.filter(channel => channel.enabled !== false && channel.disabled !== true && channel.active !== false);
+            allUserChannels = availableChannels;
+        } catch (error) {
+            if (token !== currentUserToken || revision !== userDataRevision) return;
+            stopAccountPlayback();
+            tvPlayingChannel = null;
+            tvAllChannels = [];
+            tvChannels = [];
+            renderTvVerticalChannelsBar();
+            showAccountEmptyState('No se pudieron actualizar los canales. Intenta nuevamente.');
+            return;
+        } finally { clearTimeout(timer); }
+    }
+
     // Use current user's channels if logged in, otherwise default channels
     if (Array.isArray(availableChannels)) {
         tvChannels = availableChannels;
@@ -1153,6 +1264,10 @@ async function launchTvLiveMode(targetChannel = null, availableChannels = null) 
     }
 
     tvAllChannels = tvChannels.slice();
+    if (currentUserToken && tvAllChannels.length === 0) {
+        reconcileAccountChannels([]);
+        return;
+    }
     const favorites = readTvFavorites();
     tvFavoritesOnly = !targetChannel && tvAllChannels.some(ch => favorites.has(channelFavoriteKey(ch)));
     tvPlayingChannel = targetChannel;

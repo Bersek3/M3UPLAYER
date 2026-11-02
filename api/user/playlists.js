@@ -15,6 +15,7 @@ module.exports = async function handler(req, res) {
     }
 
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+    res.setHeader('Cache-Control', 'no-store');
 
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });

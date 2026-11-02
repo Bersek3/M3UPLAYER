@@ -7,7 +7,7 @@ const path = require('node:path');
 function setup() {
     const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
     const storage = new Map();
-    const context = vm.createContext({ currentUsername: 'alice', tvChannels: [], currentTvIndex: 0,
+    const context = vm.createContext({ currentUsername: 'alice', currentUserToken: null, tvChannels: [], currentTvIndex: 0,
         localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
         document: { getElementById: () => ({ setAttribute() {} }) },
         renderTvVerticalChannelsBar() {}, showToast() {}, showTvOverlayTemporarily() {},

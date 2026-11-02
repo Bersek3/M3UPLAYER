@@ -505,6 +505,7 @@ app.get(['/api/channels', '/api/public/channels'], async (req, res) => {
 
 // Get user's combined channels (used by Samsung TV and Web Portal)
 app.get('/api/user/channels', authenticate, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
         const playlists = await playlistsCol.find({ userId: req.user.userId }).toArray();
         let allChannels = [];
@@ -516,7 +517,8 @@ app.get('/api/user/channels', authenticate, async (req, res) => {
                     allChannels.push({
                         ...playbackSource(ch),
                         number: String(counter).padStart(3, '0'),
-                        playlistName: pl.name
+                        playlistName: pl.name,
+                        playlistId: String(pl._id)
                     });
                     counter++;
                 });

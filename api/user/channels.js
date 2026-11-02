@@ -16,6 +16,7 @@ module.exports = async function handler(req, res) {
     }
 
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+    res.setHeader('Cache-Control', 'no-store');
 
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -39,7 +40,8 @@ module.exports = async function handler(req, res) {
                     allChannels.push({
                         ...playbackSource(ch),
                         number: String(counter).padStart(3, '0'),
-                        playlistName: pl.name
+                        playlistName: pl.name,
+                        playlistId: String(pl._id)
                     });
                     counter++;
                 });

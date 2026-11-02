@@ -250,6 +250,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Start loading channels from Database or Cache immediately
     loadChannelsAndBoot();
+    setInterval(() => {
+        if (localStorage.getItem(STORAGE_KEY_TOKEN) && !document.hidden) reloadChannelsFromServer(true);
+    }, 30000);
 });
 
 function initClock() {
@@ -297,7 +300,11 @@ async function loadChannelsAndBoot() {
         const res = await fetch(endpoint, { headers, cache: 'no-cache' });
         if (res.ok) {
             const data = await res.json();
-            if (data && Array.isArray(data.channels) && data.channels.length > 0) {
+            if (token !== localStorage.getItem(STORAGE_KEY_TOKEN)) return;
+            if (token && data && Array.isArray(data.channels)) {
+                applyAccountChannelList(data.channels, false);
+                if (!allChannels.length) return;
+            } else if (data && Array.isArray(data.channels) && data.channels.length > 0) {
                 allChannels = data.channels.map((ch, idx) => ({
                     number: String(idx + 1).padStart(3, '0'),
                     name: ch.name || `Canal ${idx + 1}`,
@@ -310,6 +317,12 @@ async function loadChannelsAndBoot() {
         }
     } catch (err) {
         console.warn("Error fetching channels from server:", err);
+    }
+
+    if (token && allChannels.length === 0) {
+        applyAccountChannelList([], false);
+        showError('No hay canales habilitados o no se pudo actualizar la cuenta.');
+        return;
     }
 
     // If fetch failed or had 0 channels, try localStorage cached channels
@@ -861,50 +874,61 @@ function executeExitApp() {
 // ==========================================================================
 // REMOTE CHANNELS RELOAD (NO REINSTALL REQUIRED)
 // ==========================================================================
-async function reloadChannelsFromServer() {
-    showToast("🔄 Actualizando lista de canales...");
+function applyAccountChannelList(channels, resume = true) {
+    const currentUrl = allChannels[currentChannelIndex] && allChannels[currentChannelIndex].url;
+    allChannels = channels.filter(ch => ch.enabled !== false && ch.disabled !== true && ch.active !== false)
+        .map((ch, idx) => ({ ...ch, number: String(idx + 1).padStart(3, '0'), name: ch.name || ('Canal ' + (idx + 1)), logo: ch.logo || '', group: ch.group || 'General' }));
+    localStorage.setItem(STORAGE_KEY_CACHED_CHANNELS, JSON.stringify(allChannels));
+    const kept = allChannels.findIndex(ch => ch.url === currentUrl);
+    if (kept < 0) {
+        clearTimeout(channelSwitchDebounceTimeout);
+        stopCurrentPlayback();
+        localStorage.removeItem(STORAGE_KEY_LAST_CHANNEL_URL);
+        localStorage.removeItem(STORAGE_KEY_LAST_CHANNEL);
+    }
+    currentChannelIndex = kept >= 0 ? kept : 0;
+    renderVerticalChannelList();
+    if (!allChannels.length) {
+        showBuffering(false);
+        const watermark = document.getElementById('watermark-logo');
+        if (watermark) watermark.classList.add('hidden');
+        for (const id of ['epg-title-current', 'epg-subtitle', 'epg-time-left', 'epg-title-next', 'epg-upcoming-time']) {
+            const element = document.getElementById(id);
+            if (element) element.textContent = '';
+        }
+        showError('No tienes canales habilitados. Añade una lista desde tu cuenta.');
+    } else if (resume && kept < 0) {
+        selectAndPlayChannel(0, true, true);
+    } else {
+        updateVerticalCarouselPosition();
+    }
+}
+
+let channelReloadInFlight = false;
+async function reloadChannelsFromServer(silent = false) {
+    if (channelReloadInFlight) return;
+    channelReloadInFlight = true;
     const token = localStorage.getItem(STORAGE_KEY_TOKEN);
     const serverUrl = getServerUrl();
-    const endpoint = token ? `${serverUrl}/api/user/channels?_t=${Date.now()}` : `${serverUrl}/api/channels?_t=${Date.now()}`;
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
+    const endpoint = token ? serverUrl + '/api/user/channels' : serverUrl + '/api/channels';
+    const headers = token ? { Authorization: 'Bearer ' + token } : {};
     try {
-        const res = await fetch(endpoint, { headers, cache: 'no-cache' });
-        if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.channels) && data.channels.length > 0) {
-                const currentUrl = allChannels[currentChannelIndex] ? allChannels[currentChannelIndex].url : null;
-                allChannels = data.channels.map((ch, idx) => ({
-                    number: String(idx + 1).padStart(3, '0'),
-                    name: ch.name || `Canal ${idx + 1}`,
-                    logo: ch.logo || '',
-                    group: ch.group || 'General',
-                    url: ch.url
-                }));
-                localStorage.setItem(STORAGE_KEY_CACHED_CHANNELS, JSON.stringify(allChannels));
-
-                // Re-render list
-                renderVerticalChannelList();
-
-                // Keep same playing channel index if still present
-                if (currentUrl) {
-                    const foundIdx = allChannels.findIndex(c => c.url === currentUrl);
-                    if (foundIdx !== -1) currentChannelIndex = foundIdx;
-                }
-                if (currentChannelIndex >= allChannels.length) currentChannelIndex = 0;
-
-                updateVerticalCarouselPosition();
-                showOverlay();
-                resetOverlayHideTimer();
-                showToast(`✅ Canales actualizados (${allChannels.length})`);
-                return;
-            }
+        const res = await fetch(endpoint, { headers, cache: 'no-store' });
+        if (token !== localStorage.getItem(STORAGE_KEY_TOKEN)) return;
+        if (token && (res.status === 401 || res.status === 403)) {
+            applyAccountChannelList([]);
+            showError('Tu sesión expiró. Vuelve a vincular tu cuenta.');
+            return;
         }
-        showToast("ℹ️ La lista está al día");
+        if (!res.ok) throw new Error('No se pudo actualizar');
+        const data = await res.json();
+        if (token !== localStorage.getItem(STORAGE_KEY_TOKEN)) return;
+        if (!Array.isArray(data.channels)) throw new Error('Lista no válida');
+        if (JSON.stringify(data.channels) !== JSON.stringify(allChannels)) applyAccountChannelList(data.channels);
+        if (!silent) showToast('Canales actualizados (' + allChannels.length + ')');
     } catch (err) {
-        console.warn("Error recargando canales:", err);
-        showToast("⚠️ Servidor no disponible temporalmente");
-    }
+        if (!silent) showToast('Servidor no disponible temporalmente');
+    } finally { channelReloadInFlight = false; }
 }
 
 // ==========================================================================

@@ -50,12 +50,11 @@ test('expired Android session clears saved credentials and stays at login', asyn
     assert.equal(context.closed, undefined);
 });
 
-test('account without personal channels loads enabled public channels', async () => {
+test('account without personal channels never loads public fallback channels', async () => {
     const { context, requests, launches } = setup([response([]), response([{ name: 'Public', url: 'https://example/public' }])]);
-    await context.startAndroidLive();
-    assert.equal(requests.length, 2);
-    assert.equal(requests[1].url, 'https://api.example/api/channels');
-    assert.equal(launches[0][0].name, 'Public');
+    await assert.rejects(context.startAndroidLive(), /No hay canales habilitados/);
+    assert.equal(requests.length, 1);
+    assert.equal(launches.length, 0);
 });
 
 test('empty enabled list keeps login visible without starting a fallback stream', async () => {
