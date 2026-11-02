@@ -29,3 +29,6 @@ Thumbs.db
 tv_auth.json
 .agents/
 mcp_config.json
+
+# Lista local con enlaces de acceso del proveedor
+/playlists/chile.m3u

@@ -1,0 +1,85 @@
+#EXTM3U
+#EXTINF:0 group-title="General",13 C
+#EXTGRP:General
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0pm
+#EXTINF:0 group-title="Chile",CHV
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0r0
+#EXTINF:0 group-title="Chile",CNN Chile
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qp
+#EXTINF:0 group-title="Chile",Canal 13
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0n4
+#EXTINF:0 group-title="Chile",Canal 24 Horas
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qr
+#EXTINF:0 group-title="Chile",ETC
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0mn
+#EXTINF:0 group-title="Chile",La Red
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qq
+#EXTINF:0 group-title="Chile",MEGA HD
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qn
+#EXTINF:0 group-title="Chile",Mega
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0r1
+#EXTINF:0 group-title="General",REC TV
+#EXTGRP:General
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qc
+#EXTINF:0 group-title="Deportes",TNT SPORTS
+#EXTGRP:Deportes
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0mo
+#EXTINF:0 group-title="Deportes",TNT Sports Premium SD
+#EXTGRP:Deportes
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0q9
+#EXTINF:0 group-title="Chile",TV+
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0qo
+#EXTINF:0 group-title="Chile",ViaX
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0t4
+#EXTINF:0 group-title="Latinoamerica",Zona Latina
+#EXTGRP:Latinoamerica
+#EXTVLCOPT:network-caching=1000
+http://181.78.79.131:8000/play/a0su
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/a/a2/Chilevisi%C3%B3n_2018.svg" group-title="Chile",Chilevision
+#EXTGRP:Chile
+https://vmf.edge-online.chv.cl/chv/index.m3u8
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/5/56/TVN_logo_2020.svg" group-title="Chile",TVN
+#EXTGRP:Chile
+https://rudo.video/live/tvn
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/2/2f/Canal_13_logo_2018.svg" group-title="Chile",Canal 13
+#EXTGRP:Chile
+https://rudo.video/live/c13
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/0/03/Logo_Mega_2015.png" group-title="Chile",Mega
+#EXTGRP:Chile
+https://rudo.video/live/mega
+#EXTINF:0 group-title="Chile",CANAL 13 NACIONAL SIN TRANS
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.8.199:8000/play/a0d4/index.m3u8
+#EXTINF:0 group-title="Chile",CANAL 13 TRANS
+#EXTGRP:Chile
+#EXTVLCOPT:network-caching=1000
+http://181.78.8.199:8000/play/a0dj/index.m3u8
+#EXTINF:0 group-title="Latinoamerica",TVChile
+#EXTGRP:Latinoamerica
+#EXTVLCOPT:network-caching=1000
+http://168.232.168.242:4000/play/a036/index.m3u8
