@@ -105,13 +105,23 @@ function browserProbe(fields = {}) {
 }
 
 test('cold HLS conversion gets time to start and never falls back to the public proxy', async () => {
-    const probe = browserProbe({ url: 'http://127.0.0.1:10000/live/test/index.m3u8',
+    const probe = browserProbe({ url: 'https://converter.example/live/test/index.m3u8',
         sourceUrl: 'http://provider.example/live.ts', playbackType: 'hls' });
     assert.equal(probe.timeoutMs(), 55000);
     assert.equal(probe.instances[0].config.manifestLoadingTimeOut, 45000);
     probe.timeout();
     assert.equal(probe.instances.length, 1);
     assert.equal((await probe.result).playbackMode, 'direct');
+});
+
+test('local playlist import on the public site reports the local setup without HTTP requests', async () => {
+    const probe = browserProbe({ url: 'http://127.0.0.1:10000/live/c55014add896e9fc907dc4d0/index.m3u8' });
+    const result = await probe.result;
+    assert.equal(result.playable, false);
+    assert.equal(result.playbackMode, 'direct');
+    assert.match(result.reason, /conversor local/);
+    assert.equal(probe.instances.length, 0);
+    assert.equal(probe.video.removed, true);
 });
 
 test('manifest and metadata alone do not pass; video and advancing playback are required', async () => {

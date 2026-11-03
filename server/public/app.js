@@ -564,7 +564,10 @@ function checkBrowserPlayback(channel, signal) {
         document.body.appendChild(video);
         let player, timer, poll, finished = false;
         const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-        const convertedHls = channel.playbackType === 'hls' && !!channel.sourceUrl && channel.url !== channel.sourceUrl;
+        const localHosts = ['127.0.0.1', 'localhost', '[::1]'];
+        let localSource = false;
+        try { localSource = localHosts.includes(new URL(channel.url).hostname); } catch {}
+        const convertedHls = localSource || (channel.playbackType === 'hls' && !!channel.sourceUrl && channel.url !== channel.sourceUrl);
         let mode = !directTs && !convertedHls && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
         let firstTime = null;
         const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
@@ -596,6 +599,9 @@ function checkBrowserPlayback(channel, signal) {
         }
         function start() {
             if (channel.playbackNotice) return finish(false, channel.playbackNotice);
+            if (localSource && !localHosts.includes(new URL(window.location.href).hostname)) {
+                return finish(false, 'Esta lista usa un conversor local. En este PC abre Abrir-Reproductor.cmd y http://127.0.0.1:3000. Para otros dispositivos necesitas una lista con enlaces públicos.');
+            }
             clearTimeout(timer);
             if (player) { player.destroy(); player = null; }
             video.onerror = null;
@@ -1432,7 +1438,10 @@ function playTvChannel(index) {
 
     const streamUrl = channel.url;
     const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-    const convertedHls = channel.playbackType === 'hls' && !!channel.sourceUrl && streamUrl !== channel.sourceUrl;
+    const localHosts = ['127.0.0.1', 'localhost', '[::1]'];
+    let localSource = false;
+    try { localSource = localHosts.includes(new URL(streamUrl).hostname); } catch {}
+    const convertedHls = localSource || (channel.playbackType === 'hls' && !!channel.sourceUrl && streamUrl !== channel.sourceUrl);
     let usingProxy = !convertedHls && (channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl)));
     let recoveredMedia = false;
     let networkRetries = 0;
@@ -1555,6 +1564,10 @@ function playTvChannel(index) {
         }
     }
     if (channel.playbackNotice) { fail(channel.playbackNotice); return; }
+    if (localSource && !localHosts.includes(new URL(window.location.href).hostname)) {
+        fail('Esta lista usa un conversor local. En este PC abre Abrir-Reproductor.cmd y http://127.0.0.1:3000. Para otros dispositivos necesitas una lista con enlaces públicos.');
+        return;
+    }
     startPlayback();
 
     video.onplaying = () => bufferBadge.classList.add('hidden');

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-function player(url, fields = {}) {
+function player(url, fields = {}, href = 'https://player.example/') {
     const instances = [];
     const timers = new Map();
     const directInstances = [];
@@ -28,7 +28,7 @@ function player(url, fields = {}) {
         return elements.get(id);
     } };
     const context = vm.createContext({ tvChannels: [{ url, ...fields }], tvHls: null, Hls, document,
-        window: { location: { protocol: 'https:', href: 'https://player.example/' } },
+        window: { location: { protocol: new URL(href).protocol, href } },
         DirectMpegts: {
             isChannel: channel => channel.playbackType === 'mpegts',
             create(video, source, callbacks) { const item = { source, video, callbacks,
@@ -122,7 +122,7 @@ test('MPEG-TS uses the direct player and never sends its source to the HLS proxy
 test('converted HLS retries its converter directly instead of proxying a local address', () => {
     const url = 'http://127.0.0.1:10000/live/test/index.m3u8';
     const { instances, elements, timers } = player(url, { playbackType: 'hls',
-        sourceUrl: 'http://provider.example/live.ts', playbackMode: 'proxy' });
+        sourceUrl: 'http://provider.example/live.ts', playbackMode: 'proxy' }, 'http://127.0.0.1:3000/');
     const hls = instances[0];
     assert.equal(hls.source, url);
     for (const delay of [1000, 2000, 4000]) {
@@ -135,4 +135,20 @@ test('converted HLS retries its converter directly instead of proxying a local a
     assert.equal(instances.length, 1);
     assert.equal(hls.stopped, true);
     assert.match(elements.get('tv-error-text').textContent, /conversor/);
+});
+
+test('imported local playlist without metadata never contacts Vercel from the public player', () => {
+    const url = 'http://127.0.0.1:10000/live/c55014add896e9fc907dc4d0/index.m3u8';
+    const { instances, timers, elements } = player(url);
+    assert.equal(instances.length, 0);
+    assert.equal(timers.size, 0);
+    assert.match(elements.get('tv-error-text').textContent, /Abrir-Reproductor.cmd/);
+});
+
+test('imported local playlist without metadata plays directly in the local portal', () => {
+    const url = 'http://127.0.0.1:10000/live/c55014add896e9fc907dc4d0/index.m3u8';
+    const { instances } = player(url, { playbackMode: 'proxy' }, 'http://127.0.0.1:3000/');
+    assert.equal(instances[0].source, url);
+    instances[0].events.error(null, { fatal: true, type: 'network' });
+    assert.equal(instances.length, 1);
 });
