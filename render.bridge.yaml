@@ -1,0 +1,16 @@
+# Separate Blueprint: deploy the converter without changing the existing portal.
+services:
+  - type: web
+    name: m3uplayer-video-bridge
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./video-bridge/Dockerfile.multi
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MAX_SESSIONS
+        value: "2"
+      - key: ALLOWED_ORIGINS
+        value: https://m3u-player-one.vercel.app,https://bersek3.github.io,https://appassets.androidplatform.net

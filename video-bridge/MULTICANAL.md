@@ -15,6 +15,33 @@ Abre `Abrir-Reproductor.cmd`, o ejecuta `npm run compatible-player`.
 
 ## Web pública y Android
 
+### Lista local ya guardada en la cuenta
+
+Si la cuenta contiene `chile-convertidos-local.m3u`, sus direcciones `127.0.0.1`
+no son accesibles desde Vercel ni desde otros equipos. Cuando se configura
+`M3U_PLAYBACK_BRIDGE_URL`, la API reconoce los identificadores registrados en esas
+direcciones y entrega sus equivalentes en el conversor público. No modifica la
+lista de la base de datos y no requiere volver a importarla. Los identificadores
+desconocidos siguen necesitando registrar su fuente original en el conversor.
+
+Para preparar Render por separado, usa el Blueprint `render.bridge.yaml`, con
+el repositorio completo como contexto Docker. Este archivo selecciona el plan
+`starter`; revisa el costo que muestra Render antes de crear el servicio. No se
+activa ningún alojamiento al guardar este archivo.
+
+Después del despliegue:
+
+1. Comprueba `https://DOMINIO-DEL-CONVERSOR/health`.
+2. En el proyecto Vercel `m3u-player-one`, configura para producción
+   `M3U_PLAYBACK_BRIDGE_URL=https://DOMINIO-DEL-CONVERSOR`.
+3. Despliega de nuevo Vercel con el código actualizado.
+4. Abre TV en vivo con tu cuenta. En `/api/user/channels`, CHV debe tener una URL
+   HTTPS del conversor con el mismo identificador `c55014add896e9fc907dc4d0` y
+   `playbackType: "hls"`. No debe apuntar a `127.0.0.1`.
+5. Comprueba que el video avance en el navegador y que el origen CORS sea
+   `https://m3u-player-one.vercel.app`. Una respuesta correcta de `/health` por sí
+   sola no confirma que el proveedor permita reproducir desde ese alojamiento.
+
 La misma salida HLS se puede usar en el reproductor existente de navegador y Android. Necesita un conversor encendido con HTTPS; una dirección local de este equipo no sustituye ese despliegue.
 
 1. Despliega un servicio Docker persistente usando `video-bridge/Dockerfile.multi`, con el directorio raíz del repositorio como contexto.

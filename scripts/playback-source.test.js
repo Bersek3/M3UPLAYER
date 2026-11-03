@@ -19,6 +19,36 @@ test('converter rejects non-loopback HTTP and invalid public base addresses', ()
     assert.match(playbackSource({ url: TNT_SOURCE }, { M3U_PLAYBACK_BRIDGE_URL: 'http://127.0.0.1:10000' }).url, /^http:\/\/127.0.0.1:10000\/live\//);
 });
 
+test('saved local converter playlist moves registered IDs to the public HTTPS converter', () => {
+    const id = 'c55014add896e9fc907dc4d0';
+    const env = { M3U_PLAYBACK_BRIDGE_URL: 'https://video.example' };
+    for (const host of ['127.0.0.1', 'localhost', '[::1]']) {
+        const channel = { name: 'CHV', url: `http://${host}:10000/live/${id}/index.m3u8`, playbackMode: 'proxy' };
+        const mapped = playbackSource(channel, env);
+        assert.equal(mapped.url, `https://video.example/live/${id}/index.m3u8`);
+        assert.equal(mapped.sourceUrl, channel.url);
+        assert.equal(mapped.playbackType, 'hls');
+        assert.equal(mapped.playbackMode, 'direct');
+        assert.equal(playbackSource(mapped, env).url, mapped.url);
+        assert.equal(playbackSource(mapped, { ...env, M3U_PLAYBACK_BRIDGE_URL: 'https://replacement.example' }).url,
+            `https://replacement.example/live/${id}/index.m3u8`);
+        assert.equal(channel.playbackMode, 'proxy');
+    }
+});
+
+test('local converter migration requires registered IDs and an exact loopback route', () => {
+    const id = 'c55014add896e9fc907dc4d0';
+    for (const url of [
+        `http://127.0.0.1:10000/live/${'0'.repeat(24)}/index.m3u8`,
+        `https://unrelated.example/live/${id}/index.m3u8`,
+        `http://user:secret@localhost:10000/live/${id}/index.m3u8`,
+        `http://localhost:10000/live/${id}/index.m3u8?other=1`
+    ]) {
+        const channel = { url };
+        assert.equal(playbackSource(channel, { M3U_PLAYBACK_BRIDGE_URL: 'https://video.example' }), channel);
+    }
+});
+
 test('bare provider endpoints use continuous MPEG-TS while actual HLS paths remain HLS', () => {
     for (const id of ['a0pm', 'a0r0', 'a0qp']) {
         const url = `http://181.78.79.131:8000/play/${id}`;
