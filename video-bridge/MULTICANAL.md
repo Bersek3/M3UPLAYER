@@ -81,7 +81,14 @@ El despliegue y el dominio HTTPS no se activan al guardar el código. Se requier
 
 ## Límites y disponibilidad
 
-El límite predeterminado es de dos conversiones simultáneas, compartidas entre quienes ven el mismo canal. Al solicitar un tercer canal se libera la conversión menos reciente; puede afectar a otro espectador. `MAX_SESSIONS` permite entre uno y ocho procesos según los recursos del equipo. Las conversiones sin solicitudes se detienen tras 45 segundos. El video se limita a 960 píxeles de ancho y 30 fps.
+El límite predeterminado es de dos conversiones simultáneas, compartidas entre quienes ven el mismo canal. Al solicitar un tercer canal se libera la conversión menos reciente; puede afectar a otro espectador. `MAX_SESSIONS` permite entre uno y ocho procesos según los recursos del equipo. Las conversiones sin solicitudes se detienen tras 45 segundos. La salida predeterminada usa hasta 640 píxeles de ancho y 25 fps para reducir el trabajo de conversión. Se puede recuperar el perfil anterior con `BRIDGE_VIDEO_WIDTH=960` y `BRIDGE_VIDEO_FPS=30`, según la capacidad del alojamiento.
+
+Si FFmpeg confirma un HTTP 400, 401, 403, 404 o 410, o un dominio inexistente,
+el conversor devuelve un código de causa sin publicar la dirección original. El
+reproductor muestra esa causa y detiene los reintentos: una fuente caída necesita
+un enlace vigente. El perfil ligero se comprobó con conversión H.264/AAC y cuatro
+segundos de decodificación en CHV y TNT; el informe está en
+`playlists/diagnostico-perfil-ligero.json`. No mide el rendimiento de Render.
 
 El servicio no publica las URLs originales ni ejecuta scripts de páginas. CORS limita los orígenes web, pero no autentica espectadores; para distribuir canales privados en Internet se requiere añadir control de acceso al alojamiento. No se ha activado un alojamiento público automáticamente.
 

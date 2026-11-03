@@ -163,6 +163,18 @@ test('expired converter segment reloads the manifest and ignores errors from the
     assert.equal(timers.size, 0);
 });
 
+test('confirmed provider failure from converter stops without retrying unavailable channels', () => {
+    const { instances, timers, elements } = player('https://converter.example/live/channel/index.m3u8',
+        { playbackType: 'hls', sourceUrl: 'http://provider.example/live.ts' });
+    instances[0].events.error(null, { fatal: true, type: 'network', networkDetails: {
+        responseText: JSON.stringify({ code: 'SOURCE_HTTP_404', error: 'El enlace original respondió HTTP 404.' })
+    } });
+    assert.equal(instances[0].stopped, true);
+    assert.equal(timers.size, 0);
+    assert.equal(instances.length, 1);
+    assert.match(elements.get('tv-error-text').textContent, /404/);
+});
+
 test('imported local playlist without metadata plays directly in the local portal', () => {
     const url = 'http://127.0.0.1:10000/live/c55014add896e9fc907dc4d0/index.m3u8';
     const { instances } = player(url, { playbackMode: 'proxy' }, 'http://127.0.0.1:3000/');

@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-11-03T01:28:43.459Z",
+  "scope": "Conversión del origen real a HLS, inspección de códecs y decodificación de cuatro segundos. No prueba la pantalla ni el audio de un dispositivo físico.",
+  "results": [
+    {
+      "id": "c55014add896e9fc907dc4d0",
+      "name": "CHV",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 640,
+          "height": 360
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    },
+    {
+      "id": "038c660c1d313ce605dcfaa9",
+      "name": "CNN Chile",
+      "codecs": [],
+      "decodedFourSeconds": false
+    },
+    {
+      "id": "8bf6ac528c4fbdb7ea5dfd39",
+      "name": "TNT Sports Premium SD",
+      "codecs": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 640,
+          "height": 360
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio"
+        }
+      ],
+      "decodedFourSeconds": true
+    }
+  ]
+}

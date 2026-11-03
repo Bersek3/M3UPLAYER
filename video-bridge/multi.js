@@ -24,9 +24,11 @@ function readChannels(text) {
     return channels;
 }
 
-function conversionArgs(url, dir, session) {
+function conversionArgs(url, dir, session, { width = 640, fps = 25 } = {}) {
     const args = ffmpegArgs(url, dir, session);
-    args[args.indexOf('-vf') + 1] = 'bwdif=mode=send_frame:parity=auto:deint=interlaced,' + args[args.indexOf('-vf') + 1];
+    args[args.indexOf('-vf') + 1] = `bwdif=mode=send_frame:parity=auto:deint=interlaced,fps=${fps},scale=w='min(${width},iw)':h=-2`;
+    args[args.indexOf('-g') + 1] = String(fps * 2);
+    args[args.indexOf('-keyint_min') + 1] = String(fps * 2);
     args.splice(args.indexOf('-i'), 0, '-filter_threads', '1');
     args.splice(args.indexOf('-preset'), 0, '-threads', '2');
     return args;
@@ -55,9 +57,10 @@ async function resolveSource(source) {
 }
 
 function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleMs = 45000,
-    origins = [], spawnProcess = spawn, resolve = resolveSource, rootDir } = {}) {
+    origins = [], spawnProcess = spawn, resolve = resolveSource, rootDir, videoWidth = 640, videoFps = 25 } = {}) {
     if (!(channels instanceof Map) || !channels.size) throw new Error('La lista de canales está vacía');
     if (!Number.isInteger(maxSessions) || maxSessions < 1 || maxSessions > 8) throw new Error('MAX_SESSIONS debe estar entre 1 y 8');
+    if (!Number.isInteger(videoWidth) || videoWidth < 320 || videoWidth > 1920 || videoWidth % 2 || ![25, 30].includes(videoFps)) throw new Error('Perfil de video inválido: ancho par entre 320 y 1920, FPS 25 o 30');
     const root = rootDir || fs.mkdtempSync(path.join(os.tmpdir(), 'm3u-multi-'));
     const sessions = new Map();
     let serial = Date.now(), closed = false;
@@ -96,9 +99,17 @@ function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleM
         sessions.set(id, session);
         Promise.resolve().then(() => resolve(channels.get(id).url)).then(url => {
             if (closed || session.disposed) return;
-            const child = spawnProcess(ffmpeg, conversionArgs(url, dir, ++serial), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+            const child = spawnProcess(ffmpeg, conversionArgs(url, dir, ++serial, { width: videoWidth, fps: videoFps }), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
             session.child = child;
-            child.stderr?.on('data', () => {}); // Drain output; do not publish provider credentials.
+            let diagnostic = '';
+            child.stderr?.on('data', chunk => {
+                diagnostic = (diagnostic + chunk.toString()).slice(-4096);
+                const http = /(?:Server returned|HTTP error)\s+(400|401|403|404|410)\b/i.exec(diagnostic);
+                if (http) session.failure = { code: `SOURCE_HTTP_${http[1]}`, error: `El enlace original respondió HTTP ${http[1]}. Necesita una dirección vigente del proveedor.` };
+                else if (/Failed to resolve hostname|Name or service not known|No such host is known/i.test(diagnostic)) {
+                    session.failure = { code: 'SOURCE_DNS', error: 'El dominio de la señal no se pudo resolver. Actualiza el enlace de origen.' };
+                }
+            });
             child.once('error', () => { session.failed = true; });
             child.once('exit', () => { if (!session.disposed) session.failed = true; });
         }).catch(() => { session.failed = true; });
@@ -137,6 +148,10 @@ function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleM
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
             if (res.destroyed) return;
+            if (session.failed && session.failure && !session.disposed) {
+                res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '3' });
+                return res.end(JSON.stringify(session.failure));
+            }
             if (session.failed || session.disposed) { res.writeHead(503, { 'Retry-After': '3' }); return res.end('El origen no produjo video compatible; comprueba su disponibilidad.'); }
         }
         const localRequest = Object.create(req);
@@ -153,7 +168,8 @@ if (require.main === module) {
     const channels = readChannels(fs.readFileSync(file, 'utf8'));
     const port = Number(process.env.BRIDGE_PORT || process.env.PORT || 10000);
     const origins = (process.env.ALLOWED_ORIGINS || 'http://127.0.0.1:3000,http://localhost:3000,https://m3u-player-one.vercel.app,https://appassets.androidplatform.net').split(',').map(value => new URL(value.trim()).origin);
-    const bridge = createMultiBridge({ channels, ffmpeg: process.env.FFMPEG_PATH, maxSessions: Number(process.env.MAX_SESSIONS || 2), origins });
+    const bridge = createMultiBridge({ channels, ffmpeg: process.env.FFMPEG_PATH, maxSessions: Number(process.env.MAX_SESSIONS || 2), origins,
+        videoWidth: Number(process.env.BRIDGE_VIDEO_WIDTH || 640), videoFps: Number(process.env.BRIDGE_VIDEO_FPS || 25) });
     const server = http.createServer(bridge.handler);
     server.listen(port, process.env.BRIDGE_HOST || '127.0.0.1', () => console.log(`Conversor listo: ${channels.size} canales, puerto ${port}`));
     const stop = () => { bridge.close(); server.close(); };

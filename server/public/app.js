@@ -1525,7 +1525,7 @@ function playTvChannel(index) {
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
                 // Do not retry a confirmed bad URL, HTML page or expired authorization.
-                if (usingProxy) {
+                if (usingProxy || convertedHls) {
                     try {
                         const raw = data.networkDetails?.responseText || data.response?.data || data.response?.text;
                         const detail = typeof raw === 'string' ? JSON.parse(raw) : raw;
