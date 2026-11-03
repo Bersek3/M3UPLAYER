@@ -737,8 +737,6 @@ function stopAccountPlayback() {
     document.getElementById('tv-player-buffering').classList.add('hidden');
     document.getElementById('tv-watermark-img').classList.add('hidden');
     document.getElementById('tv-player-channel-name').textContent = '';
-    document.getElementById('tv-epg-title-next').textContent = '';
-    document.getElementById('tv-epg-upcoming-time').textContent = '';
 }
 
 function showAccountEmptyState(message = 'No tienes canales habilitados. Añade una lista para ver TV en vivo.') {
@@ -1603,29 +1601,6 @@ function updateTvWatermarkAndEpg(channel) {
         watermark.classList.add('hidden');
     }
 
-    // Dynamic realistic EPG Program names
-    const now = new Date();
-    const currentHour = now.getHours();
-    const nextHour = (currentHour + 1) % 24;
-    document.getElementById('tv-epg-title-next').textContent = getDynamicProgramTitle(channel.name, nextHour);
-    document.getElementById('tv-epg-upcoming-time').textContent = `Comienza a las ${String(nextHour).padStart(2, '0')}:00`;
-}
-
-function getDynamicProgramTitle(name, hour) {
-    const ch = (name || '').toLowerCase();
-    if (ch.includes('noticias') || ch.includes('24 horas') || ch.includes('t13') || ch.includes('biobio')) {
-        if (hour >= 6 && hour < 9) return 'Edición Matinal en Vivo';
-        if (hour >= 13 && hour < 15) return 'Noticiero Tarde Central';
-        if (hour >= 20 && hour < 22) return 'Edición Central de Noticias';
-        return 'Noticias y Actualidad Minuto a Minuto';
-    }
-    if (ch.includes('mega') || ch.includes('13') || ch.includes('chilevisi') || ch.includes('tvn')) {
-        if (hour >= 8 && hour < 13) return 'Matinal en Directo';
-        if (hour >= 15 && hour < 18) return 'Telenovela & Reportajes';
-        if (hour >= 22) return 'Horario Estelar Prime';
-        return 'Transmisión Oficial en Directo';
-    }
-    return `Programa Especial (${String(hour).padStart(2, '0')}:00)`;
 }
 
 function toggleTvOverlay() {
