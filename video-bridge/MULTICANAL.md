@@ -15,7 +15,34 @@ Abre `Abrir-Reproductor.cmd`, o ejecuta `npm run compatible-player`.
 
 ## Web pública y Android
 
-### Lista local ya guardada en la cuenta
+### Conversor existente tnt-video-bridge
+
+El servicio `https://tnt-video-bridge.onrender.com` debe ejecutar la versión
+multicanal antes de usarlo como `M3U_PLAYBACK_BRIDGE_URL`. La versión antigua solo
+atiende `/live/index.m3u8` y no puede atender los identificadores de los demás
+canales. Una respuesta `503 Video not ready` indica que todavía no hay HLS
+reproducible; no basta con que `/health` devuelva `200`.
+
+Para actualizar ese mismo servicio, `video-bridge/render.yaml` conserva el nombre
+`tnt-video-bridge` y cambia el Dockerfile a `video-bridge/Dockerfile.multi`, el
+contexto Docker a la raíz del repositorio y `ALLOWED_ORIGINS` a los dominios de la
+web. Si el servicio fue creado manualmente, aplica también estos valores en sus
+ajustes de Render; editar el YAML no actualiza automáticamente un servicio que
+no esté vinculado a ese Blueprint.
+
+Cuando `/health` muestre `running`, `channels` y `sessions`, prueba
+`/live/c55014add896e9fc907dc4d0/index.m3u8` con el origen de Vercel y comprueba
+que los segmentos se descarguen. Solo después configura en producción de Vercel:
+
+```text
+M3U_PLAYBACK_BRIDGE_URL=https://tnt-video-bridge.onrender.com
+```
+
+Vuelve a desplegar Vercel. Los enlaces locales registrados de la cuenta se
+convertirán en enlaces HTTPS al consultar los canales. No configures esta variable
+contra la versión antigua, porque sus rutas multicanal devuelven `404`.
+
+### Migración de la lista guardada
 
 Si la cuenta contiene `chile-convertidos-local.m3u`, sus direcciones `127.0.0.1`
 no son accesibles desde Vercel ni desde otros equipos. Cuando se configura
