@@ -22,12 +22,13 @@ test('conversion deinterlaces and emits browser-compatible H264 and AAC with bou
     assert.equal(args[args.indexOf('-threads') + 1], '2');
 });
 
-async function fixture(t, maxSessions = 2, failureText) {
+async function fixture(t, maxSessions = 2, failureText, channelProfiles = {}) {
     const channels = readChannels(['#EXTM3U', ...['a', 'b', 'c'].flatMap(id => [`#EXTINF:-1,${id}`, `http://example.test:8000/play/${id}`])].join('\n'));
     const children = [];
-    const bridge = createMultiBridge({ channels, maxSessions, origins: ['https://player.example'], resolve: async url => url,
+    const bridge = createMultiBridge({ channels, maxSessions, channelProfiles, origins: ['https://player.example'], resolve: async url => url,
         spawnProcess(_, args) {
             const child = new EventEmitter();
+            child.args = args;
             child.stderr = new EventEmitter(); child.exitCode = null;
             child.kill = () => { child.exitCode = 0; child.emit('exit', 0); };
             children.push(child);
@@ -82,6 +83,26 @@ test('higher resolution remains configurable with matching two-second keyframes'
     const args = conversionArgs('http://example.test/play/a', '/tmp/output', 1, { width: 960, fps: 30 });
     assert.match(args[args.indexOf('-vf') + 1], /fps=30,scale=w='min\(960,iw\)'/);
     assert.equal(args[args.indexOf('-g') + 1], '60');
+});
+
+test('a channel quality override changes only that channel', async t => {
+    const id = sourceId('http://example.test:8000/play/b');
+    const { base, children } = await fixture(t, 2, null, { [id]: { width: 1920, fps: 25 } });
+    assert.equal((await fetch(`${base}/live/${id}/index.m3u8`)).status, 200);
+    const other = sourceId('http://example.test:8000/play/a');
+    assert.equal((await fetch(`${base}/live/${other}/index.m3u8`)).status, 200);
+    assert.match(children[0].args[children[0].args.indexOf('-vf') + 1], /min\(1920,iw\)/);
+    assert.equal(children[0].args[children[0].args.indexOf('-maxrate') + 1], '6000k');
+    assert.match(children[1].args[children[1].args.indexOf('-vf') + 1], /min\(640,iw\)/);
+    assert.equal(children[1].args[children[1].args.indexOf('-maxrate') + 1], '2500k');
+});
+
+test('invalid channel overrides fail before starting conversion', () => {
+    const id = sourceId('http://example.test/a');
+    const channels = new Map([[id, { url: 'http://example.test/a' }]]);
+    for (const profile of [{ width: 99999, fps: 25 }, { width: 1280, fps: 60 }, { width: '1920', fps: 25 }]) {
+        assert.throws(() => createMultiBridge({ channels, channelProfiles: { [id]: profile } }), /Perfil de canal inválido/);
+    }
 });
 
 test('viewers share one conversion and capacity evicts the least recently requested source', async t => {

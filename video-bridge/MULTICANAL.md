@@ -96,6 +96,32 @@ Una fuente que devuelve 404, un dominio inexistente o un token vencido sigue nec
 
 ## Comprobación real
 
+### Calidad automática para TNT Sports Premium SD
+
+En la máquina que ejecuta el conversor, detén temporalmente el servicio y ejecuta:
+
+```bash
+cd ~/m3u-conversor
+git pull --ff-only
+sudo systemctl stop m3u-conversor
+node scripts/tune-tnt-quality.js
+sudo systemctl start m3u-conversor
+```
+
+La herramienta captura 12 segundos originales y convierte una repetición de la
+muestra durante 30 segundos por perfil, empezando por 1920, 1280, 960 y 640
+píxeles de ancho a 25 fps. Guarda el primer perfil que termine correctamente a
+1.25x o más. Mantiene desentrelazado, H.264 y AAC; aumenta el límite de bitrate en
+720p y 1080p. Es conservación de calidad original, no reescalado con IA.
+
+El resultado se guarda solo para el ID de TNT en
+`video-bridge/channel-profiles.local.json`, excluido de Git. Los demás canales no
+cambian. `BRIDGE_CHANNEL_PROFILES` permite indicar otra ubicación del archivo.
+Si ninguna prueba cumple el margen o falla la captura, no se cambia el perfil
+anterior. Reinicia el servicio y comprueba varios minutos de reproducción: una
+muestra corta no garantiza la velocidad de todas las escenas ni la disponibilidad
+de la señal. La prueba supone una sola conversión activa.
+
 `node scripts/verify-compatible-player.js` toma CHV, TNT Sports Premium SD y CNN Chile de la lista pública, genera HLS, inspecciona los códecs y decodifica cuatro segundos de video/audio. Guarda los resultados en `playlists/compatibilidad-conversion.json`, sin direcciones privadas ni credenciales.
 
 Con `node scripts/check-compatible-sources.js` se revisan los 28 enlaces originales sin publicar sus credenciales. La comprobación encontró nueve enlaces que entregaban video, tres páginas HTML y 16 errores de origen.

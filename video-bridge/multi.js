@@ -29,6 +29,11 @@ function conversionArgs(url, dir, session, { width = 640, fps = 25 } = {}) {
     args[args.indexOf('-vf') + 1] = `bwdif=mode=send_frame:parity=auto:deint=interlaced,fps=${fps},scale=w='min(${width},iw)':h=-2`;
     args[args.indexOf('-g') + 1] = String(fps * 2);
     args[args.indexOf('-keyint_min') + 1] = String(fps * 2);
+    if (width >= 1280) {
+        args[args.indexOf('-crf') + 1] = '21';
+        args[args.indexOf('-maxrate') + 1] = width >= 1920 ? '6000k' : '4000k';
+        args[args.indexOf('-bufsize') + 1] = width >= 1920 ? '12000k' : '8000k';
+    }
     args.splice(args.indexOf('-i'), 0, '-filter_threads', '1');
     args.splice(args.indexOf('-preset'), 0, '-threads', '2');
     return args;
@@ -57,10 +62,13 @@ async function resolveSource(source) {
 }
 
 function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleMs = 45000,
-    origins = [], spawnProcess = spawn, resolve = resolveSource, rootDir, videoWidth = 640, videoFps = 25 } = {}) {
+    origins = [], spawnProcess = spawn, resolve = resolveSource, rootDir, videoWidth = 640, videoFps = 25, channelProfiles = {} } = {}) {
     if (!(channels instanceof Map) || !channels.size) throw new Error('La lista de canales está vacía');
     if (!Number.isInteger(maxSessions) || maxSessions < 1 || maxSessions > 8) throw new Error('MAX_SESSIONS debe estar entre 1 y 8');
     if (!Number.isInteger(videoWidth) || videoWidth < 320 || videoWidth > 1920 || videoWidth % 2 || ![25, 30].includes(videoFps)) throw new Error('Perfil de video inválido: ancho par entre 320 y 1920, FPS 25 o 30');
+    for (const [id, profile] of Object.entries(channelProfiles)) {
+        if (!channels.has(id) || !profile || !Number.isInteger(profile.width) || profile.width < 320 || profile.width > 1920 || profile.width % 2 || ![25, 30].includes(profile.fps)) throw new Error('Perfil de canal inválido');
+    }
     const root = rootDir || fs.mkdtempSync(path.join(os.tmpdir(), 'm3u-multi-'));
     const sessions = new Map();
     let serial = Date.now(), closed = false;
@@ -99,7 +107,8 @@ function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleM
         sessions.set(id, session);
         Promise.resolve().then(() => resolve(channels.get(id).url)).then(url => {
             if (closed || session.disposed) return;
-            const child = spawnProcess(ffmpeg, conversionArgs(url, dir, ++serial, { width: videoWidth, fps: videoFps }), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+            const profile = channelProfiles[id] || { width: videoWidth, fps: videoFps };
+            const child = spawnProcess(ffmpeg, conversionArgs(url, dir, ++serial, profile), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
             session.child = child;
             let diagnostic = '';
             child.stderr?.on('data', chunk => {
@@ -166,10 +175,12 @@ function createMultiBridge({ channels, ffmpeg = 'ffmpeg', maxSessions = 2, idleM
 if (require.main === module) {
     const file = process.env.SOURCE_PLAYLIST || path.join(__dirname, '..', 'playlists', 'chile-sin-credenciales.m3u');
     const channels = readChannels(fs.readFileSync(file, 'utf8'));
+    const profileFile = process.env.BRIDGE_CHANNEL_PROFILES || path.join(__dirname, 'channel-profiles.local.json');
+    const channelProfiles = fs.existsSync(profileFile) ? JSON.parse(fs.readFileSync(profileFile, 'utf8')) : {};
     const port = Number(process.env.BRIDGE_PORT || process.env.PORT || 10000);
     const origins = (process.env.ALLOWED_ORIGINS || 'http://127.0.0.1:3000,http://localhost:3000,https://m3u-player-one.vercel.app,https://appassets.androidplatform.net').split(',').map(value => new URL(value.trim()).origin);
     const bridge = createMultiBridge({ channels, ffmpeg: process.env.FFMPEG_PATH, maxSessions: Number(process.env.MAX_SESSIONS || 2), origins,
-        videoWidth: Number(process.env.BRIDGE_VIDEO_WIDTH || 640), videoFps: Number(process.env.BRIDGE_VIDEO_FPS || 25) });
+        videoWidth: Number(process.env.BRIDGE_VIDEO_WIDTH || 640), videoFps: Number(process.env.BRIDGE_VIDEO_FPS || 25), channelProfiles });
     const server = http.createServer(bridge.handler);
     server.listen(port, process.env.BRIDGE_HOST || '127.0.0.1', () => console.log(`Conversor listo: ${channels.size} canales, puerto ${port}`));
     const stop = () => { bridge.close(); server.close(); };
