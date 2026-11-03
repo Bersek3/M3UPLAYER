@@ -804,6 +804,14 @@ function initAccountChannelSync() {
     document.addEventListener('visibilitychange', refreshLiveAccountChannels);
 }
 
+function recoverRejectedSession(response, token) {
+    if (![401, 403].includes(response.status) || !token || token !== currentUserToken) return false;
+    document.getElementById('btn-logout').click();
+    openAuthModal('login');
+    showAuthError('Tu sesión ya no es válida. Inicia sesión nuevamente.');
+    return true;
+}
+
 // Load playlists & channels for the authenticated user
 async function loadUserData() {
     if (!currentUserToken) return;
@@ -817,6 +825,7 @@ async function loadUserData() {
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
         if (revision !== userDataRevision) return;
+        if (recoverRejectedSession(plRes, token)) return;
         if (!plRes.ok) throw new Error('No se pudieron actualizar las listas. Intenta nuevamente.');
         if (plRes.ok) {
             const plData = await plRes.json();
@@ -832,6 +841,7 @@ async function loadUserData() {
         });
 
         if (revision !== userDataRevision) return;
+        if (recoverRejectedSession(chRes, token)) return;
         if (!chRes.ok) throw new Error('No se pudieron actualizar los canales. Intenta nuevamente.');
         if (chRes.ok) {
             const chData = await chRes.json();
@@ -1233,6 +1243,7 @@ async function launchTvLiveMode(targetChannel = null, availableChannels = null) 
                 cache: 'no-store', signal: controller.signal, headers: { Authorization: `Bearer ${token}` }
             });
             if (token !== currentUserToken || revision !== userDataRevision) return;
+            if ([401, 403].includes(response.status) && recoverRejectedSession(response, token)) return;
             if (!response.ok) throw new Error('No se pudieron actualizar los canales.');
             const data = await response.json();
             if (token !== currentUserToken || revision !== userDataRevision) return;
