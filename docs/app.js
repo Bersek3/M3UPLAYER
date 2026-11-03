@@ -564,7 +564,8 @@ function checkBrowserPlayback(channel, signal) {
         document.body.appendChild(video);
         let player, timer, poll, finished = false;
         const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-        let mode = !directTs && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        const convertedHls = channel.playbackType === 'hls' && !!channel.sourceUrl && channel.url !== channel.sourceUrl;
+        let mode = !directTs && !convertedHls && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
         let firstTime = null;
         const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
         const finish = (playable, reason) => {
@@ -584,7 +585,7 @@ function checkBrowserPlayback(channel, signal) {
         const abort = () => finish(false, 'Análisis cancelado');
         function retry(reason) {
             if (finished) return;
-            if (mode === 'direct' && !directTs) {
+            if (mode === 'direct' && !directTs && !convertedHls) {
                 mode = 'proxy';
                 safeStart();
             } else finish(false, reason);
@@ -602,7 +603,7 @@ function checkBrowserPlayback(channel, signal) {
             video.removeAttribute('src');
             video.load();
             firstTime = null;
-            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), convertedHls ? 55000 : 12000);
             if (directTs) {
                 player = DirectMpegts.create(video, channel.url, {
                     onError: message => finish(false, message),
@@ -613,6 +614,7 @@ function checkBrowserPlayback(channel, signal) {
             }
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                 player = new Hls({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 4,
+                    manifestLoadingTimeOut: convertedHls ? 45000 : 10000,
                     maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 10,
                     xhrSetup: (xhr, url) => {
                         if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
@@ -1430,7 +1432,8 @@ function playTvChannel(index) {
 
     const streamUrl = channel.url;
     const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-    let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
+    const convertedHls = channel.playbackType === 'hls' && !!channel.sourceUrl && streamUrl !== channel.sourceUrl;
+    let usingProxy = !convertedHls && (channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl)));
     let recoveredMedia = false;
     let networkRetries = 0;
     let retryTimer = null;
@@ -1513,7 +1516,7 @@ function playTvChannel(index) {
                         }
                     } catch { /* Non-JSON transport failures retain bounded network retries. */ }
                 }
-                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy && !convertedHls) {
                     usingProxy = true;
                     showToast('Reintentando la señal mediante el servidor…');
                     startPlayback();
@@ -1532,7 +1535,7 @@ function playTvChannel(index) {
                 } else {
                     player.stopLoad();
                     fail(data.type === Hls.ErrorTypes.NETWORK_ERROR
-                        ? 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.'
+                        ? (convertedHls ? 'El conversor no pudo entregar video. Comprueba que esté encendido y que la señal de origen esté disponible.' : 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.')
                         : 'El navegador no pudo decodificar este video. Prueba abrirlo en VLC.');
                 }
             });
@@ -1540,7 +1543,7 @@ function playTvChannel(index) {
             player.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.onerror = () => {
-                if (!usingProxy) {
+                if (!usingProxy && !convertedHls) {
                     usingProxy = true;
                     startPlayback();
                 } else fail('No se pudo reproducir esta señal en el navegador. Prueba abrirla en VLC.');

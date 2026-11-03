@@ -118,3 +118,21 @@ test('MPEG-TS uses the direct player and never sends its source to the HLS proxy
     context.playTvChannel(0);
     assert.equal(directInstances[0].destroyed, true);
 });
+
+test('converted HLS retries its converter directly instead of proxying a local address', () => {
+    const url = 'http://127.0.0.1:10000/live/test/index.m3u8';
+    const { instances, elements, timers } = player(url, { playbackType: 'hls',
+        sourceUrl: 'http://provider.example/live.ts', playbackMode: 'proxy' });
+    const hls = instances[0];
+    assert.equal(hls.source, url);
+    for (const delay of [1000, 2000, 4000]) {
+        hls.events.error(null, { fatal: true, type: 'network' });
+        const [id, timer] = [...timers][0];
+        assert.equal(timer.delay, delay);
+        timers.delete(id); timer.fn();
+    }
+    hls.events.error(null, { fatal: true, type: 'network' });
+    assert.equal(instances.length, 1);
+    assert.equal(hls.stopped, true);
+    assert.match(elements.get('tv-error-text').textContent, /conversor/);
+});

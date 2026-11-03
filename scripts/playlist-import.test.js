@@ -75,7 +75,7 @@ test('preparation only stages candidates, without publishing channels', async ()
     assert.ok(collections.every(name => name === 'playlistImports'));
 });
 
-function browserProbe() {
+function browserProbe(fields = {}) {
     const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
     // Parse as a classic browser script too (top-level await must not slip in).
     new vm.Script(source);
@@ -85,24 +85,34 @@ function browserProbe() {
         static isSupported() { return true; }
         static Events = { MANIFEST_PARSED: 'manifest', ERROR: 'error' };
         static ErrorTypes = { NETWORK_ERROR: 'network' };
-        constructor() { this.events = {}; instances.push(this); }
+        constructor(config) { this.config = config; this.events = {}; instances.push(this); }
         on(event, fn) { this.events[event] = fn; }
         loadSource() {}
         attachMedia() {}
         destroy() { this.destroyed = true; }
     }
-    let tick, timeout;
+    let tick, timeout, timeoutMs;
     const video = { style: {}, readyState: 0, videoWidth: 0, currentTime: 0, paused: false,
         setAttribute() {}, pause() {}, removeAttribute() {}, load() {}, play: async () => {},
         remove() { this.removed = true; } };
     const context = vm.createContext({ document: { createElement: () => video, body: { appendChild() {} } },
         Hls, window: { location: { protocol: 'https:', href: 'https://example.test/' } }, URL, API_BASE: '',
-        setTimeout: fn => { timeout = fn; }, clearTimeout() {}, setInterval: fn => { tick = fn; }, clearInterval() {} });
+        setTimeout: (fn, delay) => { timeout = fn; timeoutMs = delay; }, clearTimeout() {}, setInterval: fn => { tick = fn; }, clearInterval() {} });
     vm.runInContext(source.slice(start, source.indexOf('async function analyzeAndSavePlaylist', start)), context);
     const controller = new AbortController();
-    const result = context.checkBrowserPlayback({ url: 'https://example.test/live', candidateId: 0 }, controller.signal);
-    return { result, instances, video, controller, tick: () => tick(), timeout: () => timeout() };
+    const result = context.checkBrowserPlayback({ url: 'https://example.test/live', candidateId: 0, ...fields }, controller.signal);
+    return { result, instances, video, controller, tick: () => tick(), timeout: () => timeout(), timeoutMs: () => timeoutMs };
 }
+
+test('cold HLS conversion gets time to start and never falls back to the public proxy', async () => {
+    const probe = browserProbe({ url: 'http://127.0.0.1:10000/live/test/index.m3u8',
+        sourceUrl: 'http://provider.example/live.ts', playbackType: 'hls' });
+    assert.equal(probe.timeoutMs(), 55000);
+    assert.equal(probe.instances[0].config.manifestLoadingTimeOut, 45000);
+    probe.timeout();
+    assert.equal(probe.instances.length, 1);
+    assert.equal((await probe.result).playbackMode, 'direct');
+});
 
 test('manifest and metadata alone do not pass; video and advancing playback are required', async () => {
     const probe = browserProbe();
