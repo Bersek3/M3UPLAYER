@@ -1547,7 +1547,12 @@ function playTvChannel(index) {
                     bufferBadge.classList.remove('hidden');
                     retryTimer = setTimeout(() => {
                         retryTimer = null;
-                        if (tvHls === player) player.startLoad();
+                        if (tvHls === player) {
+                            // A restarted converter has a new manifest and segment session.
+                            // startLoad() alone can keep requesting the vanished old files.
+                            if (convertedHls) startPlayback();
+                            else player.startLoad();
+                        }
                     }, delay);
                 } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
                     recoveredMedia = true;

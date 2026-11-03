@@ -123,16 +123,19 @@ test('converted HLS retries its converter directly instead of proxying a local a
     const url = 'http://127.0.0.1:10000/live/test/index.m3u8';
     const { instances, elements, timers } = player(url, { playbackType: 'hls',
         sourceUrl: 'http://provider.example/live.ts', playbackMode: 'proxy' }, 'http://127.0.0.1:3000/');
-    const hls = instances[0];
+    let hls = instances[0];
     assert.equal(hls.source, url);
     for (const delay of [1000, 2000, 4000]) {
         hls.events.error(null, { fatal: true, type: 'network' });
         const [id, timer] = [...timers][0];
         assert.equal(timer.delay, delay);
         timers.delete(id); timer.fn();
+        assert.equal(hls.destroyed, true);
+        hls = instances.at(-1);
+        assert.equal(hls.source, url);
     }
     hls.events.error(null, { fatal: true, type: 'network' });
-    assert.equal(instances.length, 1);
+    assert.equal(instances.length, 4);
     assert.equal(hls.stopped, true);
     assert.match(elements.get('tv-error-text').textContent, /conversor/);
 });
@@ -143,6 +146,21 @@ test('imported local playlist without metadata never contacts Vercel from the pu
     assert.equal(instances.length, 0);
     assert.equal(timers.size, 0);
     assert.match(elements.get('tv-error-text').textContent, /Abrir-Reproductor.cmd/);
+});
+
+test('expired converter segment reloads the manifest and ignores errors from the old player', () => {
+    const url = 'https://converter.example/live/channel/index.m3u8';
+    const { instances, timers } = player(url, { playbackType: 'hls', sourceUrl: 'http://provider.example/live.ts' });
+    const old = instances[0];
+    old.events.error(null, { fatal: true, type: 'network', response: { code: 404 } });
+    const [id, timer] = [...timers][0];
+    timers.delete(id); timer.fn();
+    assert.equal(old.destroyed, true);
+    assert.equal(instances.length, 2);
+    assert.equal(instances[1].source, url);
+    assert.equal(instances[1].restarts, undefined);
+    old.events.error(null, { fatal: true, type: 'network' });
+    assert.equal(timers.size, 0);
 });
 
 test('imported local playlist without metadata plays directly in the local portal', () => {
