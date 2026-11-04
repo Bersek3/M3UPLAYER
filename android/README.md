@@ -1,5 +1,27 @@
 # M3U Player Android 1.5.0
 
+## Google Play Console (Android App Bundle)
+
+Archivo de carga: `dist/M3U-Player-1.5.0.aab`. Paquete `cl.m3uplayer.mobile`, versionCode 10, targetSdkVersion 36. El AAB se firma con una clave de carga independiente del APK personal.
+
+Requisitos locales (excluidos de Git): JDK 17 en `.android-tools/java/<jdk>/`, Android Build Tools 35 en `.android-tools/build-tools/<version>/`, plataforma Android 36 en `.android-tools/platform/<version>/` y `bundletool.jar` en `.android-tools/`. Descargar desde Eclipse Adoptium, el repositorio oficial Android y las releases de `google/bundletool`.
+
+Primera compilacion, solo si todavia no existe una clave de carga:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-bundle.ps1 -CreateUploadKey
+```
+
+Compilaciones posteriores:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-bundle.ps1
+```
+
+El script valida la estructura con bundletool y verifica la firma JAR. Respaldar juntos `.android-tools/m3uplayer-upload.keystore` y `.android-tools/upload-key-password.txt` en un lugar privado y seguro. No subirlos al repositorio. El certificado publico se exporta a `dist/m3uplayer-upload-certificate.pem`.
+
+En Play Console, activar Play App Signing y cargar el `.aab` en la version de prueba o produccion. Para futuras cargas aumentar `android:versionCode` en el manifiesto y conservar la clave de carga. La validacion local no sustituye las pruebas en dispositivos ni la revision de Google Play.
+
 APK: dist/M3U-Player-1.5.0.apk. Android 8.0 o superior. Paquete cl.m3uplayer.mobile, versionCode 10.
 
 La app comparte la interfaz del navegador. En movil abre el acceso con correo y contrasena en vertical. Tras validar la cuenta, carga los canales habilitados y abre automaticamente TV en vivo en horizontal. Android TV conserva la orientacion horizontal tambien durante el acceso.
