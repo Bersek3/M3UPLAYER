@@ -19,6 +19,7 @@ function player(url, fields = {}, href = 'https://player.example/') {
         attachMedia() {}
         destroy() { this.destroyed = true; }
         stopLoad() { this.stopped = true; }
+        recoverMediaError() { this.mediaRecoveries = (this.mediaRecoveries || 0) + 1; }
         startLoad() { this.restarts = (this.restarts || 0) + 1; }
     }
     const elements = new Map();
@@ -50,6 +51,57 @@ test('HTTP starts with HTTPS proxy, including later HLS requests', () => {
     let target;
     instances[0].config.xhrSetup({ open(_method, url) { target = url; } }, 'http://cdn.example/seg.ts');
     assert.equal(target, '/api/proxy/hls?url=' + encodeURIComponent('http://cdn.example/seg.ts'));
+});
+
+test('persistent media failure rebuilds the video source once and reloads the live manifest', () => {
+    const { instances, timers, elements } = player('https://video.example/live/index.m3u8',
+        { playbackType: 'hls', sourceUrl: 'https://provider.example/live' });
+    const first = instances[0];
+    const video = elements.get('tv-main-video');
+    let sourceResets = 0;
+    video.removeAttribute = name => { assert.equal(name, 'src'); sourceResets++; };
+    first.events.error(null, { fatal: true, type: 'media' });
+    assert.equal(first.mediaRecoveries, 1);
+    assert.equal(timers.size, 0);
+    first.events.error(null, { fatal: true, type: 'media' });
+    assert.equal(first.stopped, true);
+    assert.equal(timers.size, 1);
+    // Duplicate callbacks must not consume recovery or show a final error early.
+    first.events.error(null, { fatal: true, type: 'media' });
+    assert.equal(elements.get('tv-error-text'), undefined);
+    const [id, timer] = [...timers][0];
+    assert.equal(timer.delay, 1000);
+    timers.delete(id);
+    timer.fn();
+    assert.equal(first.destroyed, true);
+    assert.equal(sourceResets, 1);
+    assert.equal(instances.length, 2);
+    assert.equal(instances[1].source, first.source);
+    instances[1].events.error(null, { fatal: true, type: 'media' });
+    assert.equal(instances[1].stopped, true);
+    assert.equal(timers.size, 0);
+    assert.match(elements.get('tv-error-text').textContent, /después de reiniciar/);
+});
+
+test('switching channels cancels a pending decoder rebuild and ignores stale media errors', () => {
+    const { instances, timers, context } = player('https://video.example/live.m3u8');
+    const first = instances[0];
+    first.events.error(null, { fatal: true, type: 'media' });
+    first.events.error(null, { fatal: true, type: 'media' });
+    assert.equal(timers.size, 1);
+    context.playTvChannel(0);
+    assert.equal(timers.size, 0);
+    assert.equal(first.destroyed, true);
+    first.events.error(null, { fatal: true, type: 'media' });
+    assert.equal(timers.size, 0);
+    assert.equal(instances.length, 2);
+});
+
+test('non-media engine errors are not reported as a browser decoding failure', () => {
+    const { instances, elements } = player('https://video.example/live.m3u8');
+    instances[0].events.error(null, { fatal: true, type: 'other' });
+    assert.equal(instances[0].stopped, true);
+    assert.match(elements.get('tv-error-text').textContent, /procesar esta señal/);
 });
 
 test('network failure falls back to proxy, retries with backoff, then shows an error', () => {

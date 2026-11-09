@@ -1453,6 +1453,7 @@ function playTvChannel(index) {
     const convertedHls = localSource || (channel.playbackType === 'hls' && !!channel.sourceUrl && streamUrl !== channel.sourceUrl);
     let usingProxy = !convertedHls && (channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl)));
     let recoveredMedia = false;
+    let mediaRestarts = 0;
     let networkRetries = 0;
     let retryTimer = null;
     const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
@@ -1475,8 +1476,13 @@ function playTvChannel(index) {
         showToast('Pulsa reproducir en la barra de controles para iniciar la señal');
     }
 
-    function startPlayback() {
+    function startPlayback(resetMedia = false) {
         if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (resetMedia) {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        }
         if (directTs) {
             const player = DirectMpegts.create(video, streamUrl, {
                 onBuffering: value => bufferBadge.classList.toggle('hidden', !value),
@@ -1522,6 +1528,7 @@ function playTvChannel(index) {
             });
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
+                if (retryTimer !== null) return;
                 // Do not retry a confirmed bad URL, HTML page or expired authorization.
                 if (usingProxy || convertedHls) {
                     try {
@@ -1555,11 +1562,24 @@ function playTvChannel(index) {
                 } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
                     recoveredMedia = true;
                     player.recoverMediaError();
+                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRestarts < 1) {
+                    // A failed MSE decoder may survive recoverMediaError(). Rebuild
+                    // the video element's source and reload the live manifest once.
+                    mediaRestarts++;
+                    player.stopLoad();
+                    bufferBadge.classList.remove('hidden');
+                    showToast('Reiniciando la reproducción del canal…');
+                    retryTimer = setTimeout(() => {
+                        retryTimer = null;
+                        if (tvHls === player) startPlayback(true);
+                    }, 1000);
                 } else {
                     player.stopLoad();
                     fail(data.type === Hls.ErrorTypes.NETWORK_ERROR
                         ? (convertedHls ? 'El conversor no pudo entregar video. Comprueba que esté encendido y que la señal de origen esté disponible.' : 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.')
-                        : 'El navegador no pudo decodificar este video. Prueba abrirlo en VLC.');
+                        : (data.type === Hls.ErrorTypes.MEDIA_ERROR
+                            ? 'No se pudo recuperar el video después de reiniciar el reproductor. Recarga la página e inténtalo nuevamente.'
+                            : 'El reproductor no pudo procesar esta señal. Vuelve a abrir el canal.'));
                 }
             });
             player.loadSource(usingProxy ? proxyUrl(streamUrl) : streamUrl);
