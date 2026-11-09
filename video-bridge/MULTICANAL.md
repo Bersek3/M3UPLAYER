@@ -129,3 +129,31 @@ Con `node scripts/check-compatible-sources.js` se revisan los 28 enlaces origina
 `node scripts/verify-compatible-player.js --all` comprueba los enlaces que entregaron video. La prueba de esta versión confirmó conversión a H.264/AAC y decodificación en los nueve: 13C, CHV, Canal 13, MEGA HD, TNT SPORTS, TNT Sports Premium SD, ViaX, Zona Latina y CANAL 13 NACIONAL SIN TRANS. Los dos últimos nombres de Canal 13 son alternativas del mismo canal. CNN Chile devolvió HTTP 404 en la consulta directa, también con el identificador de VLC. Esto no es una comprobación visual en un dispositivo físico.
 
 Referencias: [salida HLS de FFmpeg](https://ffmpeg.org/ffmpeg-formats.html#hls-2), [compilaciones Windows enlazadas por FFmpeg](https://ffmpeg.org/download.html).
+
+
+### Ajustar CHV en la VM del conversor
+
+Vercel sirve la aplicaci?n; la VM ejecuta `m3u-conversor` y entrega el video.
+Para medir CHV con la misma herramienta utilizada para TNT:
+
+```bash
+cd ~/m3u-conversor
+git pull --ff-only
+sudo systemctl stop m3u-conversor
+node scripts/tune-channel-quality.js CHV
+sudo systemctl start m3u-conversor
+```
+
+El nombre debe coincidir exactamente con la lista. El comando original
+`node scripts/tune-tnt-quality.js` contin?a ajustando solamente TNT. Cada ajuste
+conserva los perfiles de los dem?s canales. Si la captura o todas las pruebas
+fallan, mantiene el archivo anterior. Detener el servicio evita competir por
+CPU durante la medici?n e interrumpe temporalmente la reproducci?n.
+
+CHV puede entregar 1920?1080 entrelazado: el perfil de ancho 1920 conserva
+esa resoluci?n y convierte a H.264 progresivo a 25 fps con audio AAC.
+El ancho es un m?ximo, no garantiza 1080p si cambia la resoluci?n del origen.
+La prueba exige un margen m?nimo de 1.25x y puede elegir una resoluci?n menor.
+Esto no utiliza IA. La superresoluci?n con IA requiere un modelo, un motor
+compatible y una medici?n de rendimiento en la VM antes de activarla; que
+FFmpeg enumere el filtro `sr` no confirma que tenga un motor operativo.
