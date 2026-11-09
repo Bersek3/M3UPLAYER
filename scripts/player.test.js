@@ -104,6 +104,38 @@ test('non-media engine errors are not reported as a browser decoding failure', (
     assert.match(elements.get('tv-error-text').textContent, /procesar esta señal/);
 });
 
+test('decoder diagnostics preserve the native cause before recovery clears it and omit source URLs', () => {
+    const { instances, elements } = player('https://video.example/private.m3u8?token=secret');
+    const video = elements.get('tv-main-video');
+    video.error = { code: 3, message: 'PIPELINE_ERROR_DECODE https://video.example/private?token=secret' };
+    instances[0].recoverMediaError = () => { video.error = null; };
+    instances[0].events.error(null, { fatal: true, type: 'media', details: 'bufferAppendError' });
+    const snapshot = video.playbackDiagnostics.errors[0];
+    assert.equal(video.error, null);
+    assert.equal(snapshot.mediaCode, 3);
+    assert.equal(snapshot.detail, 'bufferAppendError');
+    assert.match(snapshot.mediaMessage, /PIPELINE_ERROR_DECODE/);
+    assert.ok(!JSON.stringify(video.playbackDiagnostics).includes('secret'));
+    assert.ok(!JSON.stringify(video.playbackDiagnostics).includes('video.example'));
+});
+
+test('copying a playback diagnostic includes the captured error and browser version', async () => {
+    let copied, notice;
+    const diagnostics = { channel: 'CHV', errors: [{ mediaCode: 3, mediaMessage: 'PIPELINE_ERROR_DECODE' }] };
+    const context = vm.createContext({
+        document: { getElementById: () => ({ playbackDiagnostics: diagnostics }) },
+        navigator: { userAgent: 'Test browser', clipboard: { async writeText(text) { copied = JSON.parse(text); } } },
+        showToast(text) { notice = text; }
+    });
+    const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+    const start = source.indexOf('async function copyTvPlaybackDiagnostics()');
+    vm.runInContext(source.slice(start, source.indexOf('function initTvPlaybackUi(', start)), context);
+    await context.copyTvPlaybackDiagnostics();
+    assert.equal(copied.errors[0].mediaMessage, 'PIPELINE_ERROR_DECODE');
+    assert.equal(copied.browser, 'Test browser');
+    assert.equal(notice, 'Diagnóstico copiado');
+});
+
 test('network failure falls back to proxy, retries with backoff, then shows an error', () => {
     const { instances, elements, timers } = player('https://cdn.example/live.m3u8');
     instances[0].events.error(null, { fatal: true, type: 'network' });

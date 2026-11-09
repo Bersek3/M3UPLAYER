@@ -180,6 +180,7 @@ function initNavbar() {
 
 function switchView(viewName) {
     currentView = viewName;
+    document.body.classList.toggle('tv-live-page', viewName === 'live');
     if (IS_ANDROID_APP) {
         document.body.classList.toggle('android-live', viewName === 'live');
         window.AndroidApp?.setLiveMode(viewName === 'live');
@@ -1072,11 +1073,26 @@ function initTvVolume(video) {
     update();
 }
 
+async function copyTvPlaybackDiagnostics() {
+    const diagnostics = document.getElementById('tv-main-video').playbackDiagnostics;
+    if (!diagnostics?.errors.length) {
+        showToast('Todavía no hay un error registrado.');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(JSON.stringify({ ...diagnostics, browser: navigator.userAgent }, null, 2));
+        showToast('Diagnóstico copiado');
+    } catch {
+        showToast('El navegador bloqueó la copia del diagnóstico.');
+    }
+}
+
 function initTvPlaybackUi(video) {
     const container = document.getElementById('tv-video-container');
     const play = document.getElementById('btn-tv-play');
     const buffer = document.getElementById('tv-player-buffering');
     video.controls = false;
+    document.getElementById('btn-tv-copy-error')?.addEventListener('click', copyTvPlaybackDiagnostics);
     const update = () => {
         const paused = video.paused;
         play.setAttribute('aria-label', paused ? 'Reproducir' : 'Pausar');
@@ -1436,6 +1452,7 @@ function playTvChannel(index) {
     const video = document.getElementById('tv-main-video');
     const bufferBadge = document.getElementById('tv-player-buffering');
     const errorBadge = document.getElementById('tv-player-error');
+    video.playbackDiagnostics = { channel: channel.name || '', errors: [] };
 
     bufferBadge.classList.remove('hidden');
     errorBadge.classList.add('hidden');
@@ -1528,6 +1545,22 @@ function playTvChannel(index) {
             });
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
+                // Capture the native error before recovery clears HTMLMediaElement.error.
+                // Do not include provider URLs, request headers or account credentials.
+                const nativeError = video.error;
+                video.playbackDiagnostics.errors.push({
+                    type: data.type,
+                    detail: data.details || '',
+                    hlsMessage: String(data.error?.message || data.reason || '').replace(/https?:\/\/[^\s"']+/g, '[URL]').slice(0, 500),
+                    mediaCode: nativeError?.code || 0,
+                    mediaMessage: String(nativeError?.message || '').replace(/https?:\/\/[^\s"']+/g, '[URL]').slice(0, 500),
+                    videoSize: [video.videoWidth || 0, video.videoHeight || 0],
+                    readyState: video.readyState,
+                    currentTime: video.currentTime,
+                    mediaRestarts,
+                    networkRetries
+                });
+                if (video.playbackDiagnostics.errors.length > 8) video.playbackDiagnostics.errors.shift();
                 if (retryTimer !== null) return;
                 // Do not retry a confirmed bad URL, HTML page or expired authorization.
                 if (usingProxy || convertedHls) {

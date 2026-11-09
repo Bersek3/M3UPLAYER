@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5.7.0">
+    <link rel="stylesheet" href="style.css?v=5.7.1">
     <script src="hls.min.js"></script>
     <script src="vendor/mpegts-1.8.2.min.js"></script>
     <script src="vendor/mpg123-decoder-1.0.3.min.js" charset="UTF-8"></script>
@@ -275,6 +275,7 @@
                 <div id="tv-player-error" class="tv-error-badge hidden">
                     <span class="err-icon">⚠️</span>
                     <span id="tv-error-text">Canal no disponible temporalmente</span>
+                    <button id="btn-tv-copy-error" class="btn-tv-copy-error" type="button">Copiar diagnóstico</button>
                 </div>
 
                 <!-- TOP RIGHT WATERMARK LOGO -->
@@ -380,6 +381,6 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast-notify" class="toast-popup hidden"></div>
 
-    <script src="app.js?v=5.7.6"></script>
+    <script src="app.js?v=5.7.7"></script>
 </body>
 </html>
