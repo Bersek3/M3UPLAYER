@@ -32,6 +32,7 @@
         let monitor = null;
         let retries = 0;
         let awaitingBuffer = true;
+        let refillBuffer = false;
         let lastTime = 0;
         let lastAdvance = 0;
         let healthySince = 0;
@@ -78,8 +79,9 @@
                     break;
                 }
             }
-            if (ahead < 4) return;
-            if (audio && audio.hasAudio() && audio.ahead() < 3) return;
+            // Start promptly; reserve the larger cushion for recovery after a stall.
+            if (ahead < (refillBuffer ? 4 : 1.5)) return;
+            if (audio && audio.hasAudio() && audio.ahead() < (refillBuffer ? 3 : 1.5)) return;
             awaitingBuffer = false;
             video.play().catch(error => {
                 if (destroyed || error.name === 'AbortError') return;
@@ -93,6 +95,7 @@
             // Refill instead of repeatedly draining the buffer at the live edge.
             if (!video.paused) {
                 awaitingBuffer = true;
+                refillBuffer = true;
                 video.pause();
             }
             notify('onBuffering', true);
@@ -120,6 +123,7 @@
             if (destroyed) return;
             releasePlayer();
             awaitingBuffer = true;
+            refillBuffer = false;
             lastTime = 0;
             lastAdvance = Date.now();
             healthySince = 0;
@@ -164,7 +168,7 @@
                         ...(customLoader ? { customLoader } : {}),
                         ...(root.AvcFields ? { avcSampleProcessor: root.AvcFields.create() } : {}),
                         enableStashBuffer: true,
-                        stashInitialSize: 384 * 1024,
+                        stashInitialSize: 64 * 1024,
                         liveBufferLatencyChasing: false,
                         liveSync: false,
                         autoCleanupSourceBuffer: true,

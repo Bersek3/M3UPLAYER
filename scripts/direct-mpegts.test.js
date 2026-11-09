@@ -160,13 +160,13 @@ test('HTTP page can attempt the original HTTP stream without Render', () => {
     assert.deepEqual(f.errors, []);
 });
 
-test('waits for four seconds of forward buffer before playing', () => {
+test('starts with 1.5 seconds of forward buffer before playing', () => {
     const f = fixture();
     f.start();
-    f.setRanges([[0, 3.9]]);
+    f.setRanges([[0, 1.4]]);
     f.emit('progress');
     assert.equal(f.video.playCalls, 0);
-    f.setRanges([[0, 4]]);
+    f.setRanges([[0, 1.5]]);
     f.emit('canplay');
     assert.equal(f.video.playCalls, 1);
     f.emit('progress');
@@ -194,6 +194,9 @@ test('refills after underflow without chasing latency or speeding up voices', ()
     assert.equal(f.video.paused, true);
     assert.equal(f.video.pauseCalls, 1);
     f.emit('progress');
+    assert.equal(f.video.playCalls, 1);
+    f.setRanges([[0, 6.5]]);
+    f.tick();
     assert.equal(f.video.playCalls, 1);
     f.setRanges([[0, 9]]);
     f.tick();
@@ -362,22 +365,22 @@ test('hybrid playback resumes WebAudio immediately but waits for WASM before sta
     assert.equal(f.instances[0].config.lazyLoad, false);
 });
 
-test('hybrid playback starts only after four seconds of video and three seconds of decoded audio', async () => {
+test('hybrid startup waits for 1.5 seconds of both video and decoded audio', async () => {
     const f = fixture({ hybrid: true });
     f.start();
     const audio = f.audioInstances[0];
     audio.resolveReady();
     await audio.ready;
     audio.detected = true;
-    audio.aheadValue = 2.9;
+    audio.aheadValue = 1.4;
     f.setRanges([[0, 5]]);
     f.emit('progress');
     assert.equal(f.video.playCalls, 0);
-    audio.aheadValue = 3;
-    f.setRanges([[0, 3.9]]);
+    audio.aheadValue = 1.5;
+    f.setRanges([[0, 1.4]]);
     f.emit('progress');
     assert.equal(f.video.playCalls, 0);
-    f.setRanges([[0, 4]]);
+    f.setRanges([[0, 1.5]]);
     f.emit('progress');
     assert.equal(f.video.playCalls, 1);
     assert.equal(f.video.playbackRate, 1);
