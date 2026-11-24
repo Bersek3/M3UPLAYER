@@ -3,11 +3,11 @@ services:
     name: tnt-video-bridge
     runtime: docker
     plan: starter
-    dockerfilePath: ./video-bridge/Dockerfile
-    dockerContext: ./video-bridge
+    dockerfilePath: ./video-bridge/Dockerfile.multi
+    dockerContext: .
     healthCheckPath: /health
     envVars:
-      - key: SOURCE_URL
-        value: http://181.78.79.131:8000/play/a0q9
-      - key: ALLOWED_ORIGIN
-        sync: false
+      - key: MAX_SESSIONS
+        value: "2"
+      - key: ALLOWED_ORIGINS
+        value: https://m3u-player-one.vercel.app,https://bersek3.github.io,https://appassets.androidplatform.net

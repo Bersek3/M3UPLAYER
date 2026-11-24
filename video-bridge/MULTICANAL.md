@@ -15,6 +15,60 @@ Abre `Abrir-Reproductor.cmd`, o ejecuta `npm run compatible-player`.
 
 ## Web pública y Android
 
+### Conversor existente tnt-video-bridge
+
+El servicio `https://tnt-video-bridge.onrender.com` debe ejecutar la versión
+multicanal antes de usarlo como `M3U_PLAYBACK_BRIDGE_URL`. La versión antigua solo
+atiende `/live/index.m3u8` y no puede atender los identificadores de los demás
+canales. Una respuesta `503 Video not ready` indica que todavía no hay HLS
+reproducible; no basta con que `/health` devuelva `200`.
+
+Para actualizar ese mismo servicio, `video-bridge/render.yaml` conserva el nombre
+`tnt-video-bridge` y cambia el Dockerfile a `video-bridge/Dockerfile.multi`, el
+contexto Docker a la raíz del repositorio y `ALLOWED_ORIGINS` a los dominios de la
+web. Si el servicio fue creado manualmente, aplica también estos valores en sus
+ajustes de Render; editar el YAML no actualiza automáticamente un servicio que
+no esté vinculado a ese Blueprint.
+
+Cuando `/health` muestre `running`, `channels` y `sessions`, prueba
+`/live/c55014add896e9fc907dc4d0/index.m3u8` con el origen de Vercel y comprueba
+que los segmentos se descarguen. Solo después configura en producción de Vercel:
+
+```text
+M3U_PLAYBACK_BRIDGE_URL=https://tnt-video-bridge.onrender.com
+```
+
+Vuelve a desplegar Vercel. Los enlaces locales registrados de la cuenta se
+convertirán en enlaces HTTPS al consultar los canales. No configures esta variable
+contra la versión antigua, porque sus rutas multicanal devuelven `404`.
+
+### Migración de la lista guardada
+
+Si la cuenta contiene `chile-convertidos-local.m3u`, sus direcciones `127.0.0.1`
+no son accesibles desde Vercel ni desde otros equipos. Cuando se configura
+`M3U_PLAYBACK_BRIDGE_URL`, la API reconoce los identificadores registrados en esas
+direcciones y entrega sus equivalentes en el conversor público. No modifica la
+lista de la base de datos y no requiere volver a importarla. Los identificadores
+desconocidos siguen necesitando registrar su fuente original en el conversor.
+
+Para preparar Render por separado, usa el Blueprint `render.bridge.yaml`, con
+el repositorio completo como contexto Docker. Este archivo selecciona el plan
+`starter`; revisa el costo que muestra Render antes de crear el servicio. No se
+activa ningún alojamiento al guardar este archivo.
+
+Después del despliegue:
+
+1. Comprueba `https://DOMINIO-DEL-CONVERSOR/health`.
+2. En el proyecto Vercel `m3u-player-one`, configura para producción
+   `M3U_PLAYBACK_BRIDGE_URL=https://DOMINIO-DEL-CONVERSOR`.
+3. Despliega de nuevo Vercel con el código actualizado.
+4. Abre TV en vivo con tu cuenta. En `/api/user/channels`, CHV debe tener una URL
+   HTTPS del conversor con el mismo identificador `c55014add896e9fc907dc4d0` y
+   `playbackType: "hls"`. No debe apuntar a `127.0.0.1`.
+5. Comprueba que el video avance en el navegador y que el origen CORS sea
+   `https://m3u-player-one.vercel.app`. Una respuesta correcta de `/health` por sí
+   sola no confirma que el proveedor permita reproducir desde ese alojamiento.
+
 La misma salida HLS se puede usar en el reproductor existente de navegador y Android. Necesita un conversor encendido con HTTPS; una dirección local de este equipo no sustituye ese despliegue.
 
 1. Despliega un servicio Docker persistente usando `video-bridge/Dockerfile.multi`, con el directorio raíz del repositorio como contexto.
@@ -27,13 +81,46 @@ El despliegue y el dominio HTTPS no se activan al guardar el código. Se requier
 
 ## Límites y disponibilidad
 
-El límite predeterminado es de dos conversiones simultáneas, compartidas entre quienes ven el mismo canal. Al solicitar un tercer canal se libera la conversión menos reciente; puede afectar a otro espectador. `MAX_SESSIONS` permite entre uno y ocho procesos según los recursos del equipo. Las conversiones sin solicitudes se detienen tras 45 segundos. El video se limita a 960 píxeles de ancho y 30 fps.
+El límite predeterminado es de dos conversiones simultáneas, compartidas entre quienes ven el mismo canal. Al solicitar un tercer canal se libera la conversión menos reciente; puede afectar a otro espectador. `MAX_SESSIONS` permite entre uno y ocho procesos según los recursos del equipo. Las conversiones sin solicitudes se detienen tras 45 segundos. La salida predeterminada usa hasta 640 píxeles de ancho y 25 fps para reducir el trabajo de conversión. Se puede recuperar el perfil anterior con `BRIDGE_VIDEO_WIDTH=960` y `BRIDGE_VIDEO_FPS=30`, según la capacidad del alojamiento.
+
+Si FFmpeg confirma un HTTP 400, 401, 403, 404 o 410, o un dominio inexistente,
+el conversor devuelve un código de causa sin publicar la dirección original. El
+reproductor muestra esa causa y detiene los reintentos: una fuente caída necesita
+un enlace vigente. El perfil ligero se comprobó con conversión H.264/AAC y cuatro
+segundos de decodificación en CHV y TNT; el informe está en
+`playlists/diagnostico-perfil-ligero.json`. No mide el rendimiento de Render.
 
 El servicio no publica las URLs originales ni ejecuta scripts de páginas. CORS limita los orígenes web, pero no autentica espectadores; para distribuir canales privados en Internet se requiere añadir control de acceso al alojamiento. No se ha activado un alojamiento público automáticamente.
 
 Una fuente que devuelve 404, un dominio inexistente o un token vencido sigue necesitando un enlace actualizado. El conversor no elimina esas restricciones. El proveedor también puede aceptar la conexión desde tu casa y rechazar una IP de un centro de datos.
 
 ## Comprobación real
+
+### Calidad automática para TNT Sports Premium SD
+
+En la máquina que ejecuta el conversor, detén temporalmente el servicio y ejecuta:
+
+```bash
+cd ~/m3u-conversor
+git pull --ff-only
+sudo systemctl stop m3u-conversor
+node scripts/tune-tnt-quality.js
+sudo systemctl start m3u-conversor
+```
+
+La herramienta captura 12 segundos originales y convierte una repetición de la
+muestra durante 30 segundos por perfil, empezando por 1920, 1280, 960 y 640
+píxeles de ancho a 25 fps. Guarda el primer perfil que termine correctamente a
+1.25x o más. Mantiene desentrelazado, H.264 y AAC; aumenta el límite de bitrate en
+720p y 1080p. Es conservación de calidad original, no reescalado con IA.
+
+El resultado se guarda solo para el ID de TNT en
+`video-bridge/channel-profiles.local.json`, excluido de Git. Los demás canales no
+cambian. `BRIDGE_CHANNEL_PROFILES` permite indicar otra ubicación del archivo.
+Si ninguna prueba cumple el margen o falla la captura, no se cambia el perfil
+anterior. Reinicia el servicio y comprueba varios minutos de reproducción: una
+muestra corta no garantiza la velocidad de todas las escenas ni la disponibilidad
+de la señal. La prueba supone una sola conversión activa.
 
 `node scripts/verify-compatible-player.js` toma CHV, TNT Sports Premium SD y CNN Chile de la lista pública, genera HLS, inspecciona los códecs y decodifica cuatro segundos de video/audio. Guarda los resultados en `playlists/compatibilidad-conversion.json`, sin direcciones privadas ni credenciales.
 
@@ -42,3 +129,31 @@ Con `node scripts/check-compatible-sources.js` se revisan los 28 enlaces origina
 `node scripts/verify-compatible-player.js --all` comprueba los enlaces que entregaron video. La prueba de esta versión confirmó conversión a H.264/AAC y decodificación en los nueve: 13C, CHV, Canal 13, MEGA HD, TNT SPORTS, TNT Sports Premium SD, ViaX, Zona Latina y CANAL 13 NACIONAL SIN TRANS. Los dos últimos nombres de Canal 13 son alternativas del mismo canal. CNN Chile devolvió HTTP 404 en la consulta directa, también con el identificador de VLC. Esto no es una comprobación visual en un dispositivo físico.
 
 Referencias: [salida HLS de FFmpeg](https://ffmpeg.org/ffmpeg-formats.html#hls-2), [compilaciones Windows enlazadas por FFmpeg](https://ffmpeg.org/download.html).
+
+
+### Ajustar CHV en la VM del conversor
+
+Vercel sirve la aplicaci?n; la VM ejecuta `m3u-conversor` y entrega el video.
+Para medir CHV con la misma herramienta utilizada para TNT:
+
+```bash
+cd ~/m3u-conversor
+git pull --ff-only
+sudo systemctl stop m3u-conversor
+node scripts/tune-channel-quality.js CHV
+sudo systemctl start m3u-conversor
+```
+
+El nombre debe coincidir exactamente con la lista. El comando original
+`node scripts/tune-tnt-quality.js` contin?a ajustando solamente TNT. Cada ajuste
+conserva los perfiles de los dem?s canales. Si la captura o todas las pruebas
+fallan, mantiene el archivo anterior. Detener el servicio evita competir por
+CPU durante la medici?n e interrumpe temporalmente la reproducci?n.
+
+CHV puede entregar 1920?1080 entrelazado: el perfil de ancho 1920 conserva
+esa resoluci?n y convierte a H.264 progresivo a 25 fps con audio AAC.
+El ancho es un m?ximo, no garantiza 1080p si cambia la resoluci?n del origen.
+La prueba exige un margen m?nimo de 1.25x y puede elegir una resoluci?n menor.
+Esto no utiliza IA. La superresoluci?n con IA requiere un modelo, un motor
+compatible y una medici?n de rendimiento en la VM antes de activarla; que
+FFmpeg enumere el filtro `sr` no confirma que tenga un motor operativo.

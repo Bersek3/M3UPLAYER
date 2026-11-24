@@ -8,14 +8,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5.7.0">
+    <link rel="stylesheet" href="style.css?v=5.7.1">
     <script src="hls.min.js"></script>
     <script src="vendor/mpegts-1.8.2.min.js"></script>
     <script src="vendor/mpg123-decoder-1.0.3.min.js" charset="UTF-8"></script>
     <script src="mp2-ts-loader.js?v=1"></script>
     <script src="mp2-audio.js?v=1"></script>
     <script src="avc-fields.js?v=1"></script>
-    <script src="direct-mpegts.js?v=2"></script>
+    <script src="direct-mpegts.js?v=3"></script>
 </head>
 <body class="theme-dark">
 
@@ -102,7 +102,7 @@
                     <div class="bento-card">
                         <div class="bento-icon">📺</div>
                         <h3>Diseño Idéntico a Smart TV</h3>
-                        <p>Reproductor nativo con tira lateral vertical, EPG en tiempo real, cambio de canales fluido y reloj digital.</p>
+                        <p>Reproductor nativo con tira lateral vertical, cambio de canales fluido y reloj digital.</p>
                     </div>
                     <div class="bento-card">
                         <div class="bento-icon">☁️</div>
@@ -275,6 +275,7 @@
                 <div id="tv-player-error" class="tv-error-badge hidden">
                     <span class="err-icon">⚠️</span>
                     <span id="tv-error-text">Canal no disponible temporalmente</span>
+                    <button id="btn-tv-copy-error" class="btn-tv-copy-error" type="button">Copiar diagnóstico</button>
                 </div>
 
                 <!-- TOP RIGHT WATERMARK LOGO -->
@@ -313,19 +314,6 @@
                             </div>
                         </div>
 
-                        <!-- FLOATING EPG CARDS ROW -->
-                        <div class="tv-epg-cards-container" id="tv-epg-container">
-                            <!-- Card 2: PRÓXIMO PROGRAMA -->
-                            <div class="tv-epg-card tv-epg-next" id="tv-card-next">
-                                <div class="tv-epg-header">
-                                    <span class="tv-badge-upcoming" id="tv-epg-upcoming-time">Comienza a las 13:00</span>
-                                </div>
-                                <div class="tv-epg-footer">
-                                    <h3 class="tv-epg-title" id="tv-epg-title-next">Próximo Programa</h3>
-                                    <p class="tv-epg-subtitle" id="tv-epg-sub-next">A continuación</p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- BOTTOM RIGHT REAL-TIME CLOCK -->
@@ -393,6 +381,6 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast-notify" class="toast-popup hidden"></div>
 
-    <script src="app.js?v=5.7.0"></script>
+    <script src="app.js?v=5.7.7"></script>
 </body>
 </html>

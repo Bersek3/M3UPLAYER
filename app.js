@@ -180,6 +180,7 @@ function initNavbar() {
 
 function switchView(viewName) {
     currentView = viewName;
+    document.body.classList.toggle('tv-live-page', viewName === 'live');
     if (IS_ANDROID_APP) {
         document.body.classList.toggle('android-live', viewName === 'live');
         window.AndroidApp?.setLiveMode(viewName === 'live');
@@ -564,7 +565,11 @@ function checkBrowserPlayback(channel, signal) {
         document.body.appendChild(video);
         let player, timer, poll, finished = false;
         const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-        let mode = !directTs && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
+        const localHosts = ['127.0.0.1', 'localhost', '[::1]'];
+        let localSource = false;
+        try { localSource = localHosts.includes(new URL(channel.url).hostname); } catch {}
+        const convertedHls = localSource || (channel.playbackType === 'hls' && !!channel.sourceUrl && channel.url !== channel.sourceUrl);
+        let mode = !directTs && !convertedHls && window.location.protocol === 'https:' && /^http:/i.test(channel.url) ? 'proxy' : 'direct';
         let firstTime = null;
         const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
         const finish = (playable, reason) => {
@@ -584,7 +589,7 @@ function checkBrowserPlayback(channel, signal) {
         const abort = () => finish(false, 'Análisis cancelado');
         function retry(reason) {
             if (finished) return;
-            if (mode === 'direct' && !directTs) {
+            if (mode === 'direct' && !directTs && !convertedHls) {
                 mode = 'proxy';
                 safeStart();
             } else finish(false, reason);
@@ -595,6 +600,9 @@ function checkBrowserPlayback(channel, signal) {
         }
         function start() {
             if (channel.playbackNotice) return finish(false, channel.playbackNotice);
+            if (localSource && !localHosts.includes(new URL(window.location.href).hostname)) {
+                return finish(false, 'Esta lista usa un conversor local. En este PC abre Abrir-Reproductor.cmd y http://127.0.0.1:3000. Para otros dispositivos necesitas una lista con enlaces públicos.');
+            }
             clearTimeout(timer);
             if (player) { player.destroy(); player = null; }
             video.onerror = null;
@@ -602,7 +610,7 @@ function checkBrowserPlayback(channel, signal) {
             video.removeAttribute('src');
             video.load();
             firstTime = null;
-            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), 12000);
+            timer = setTimeout(() => retry('Sin imagen y reproducción sostenida dentro del tiempo de prueba'), convertedHls ? 55000 : 12000);
             if (directTs) {
                 player = DirectMpegts.create(video, channel.url, {
                     onError: message => finish(false, message),
@@ -613,6 +621,7 @@ function checkBrowserPlayback(channel, signal) {
             }
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                 player = new Hls({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 4,
+                    manifestLoadingTimeOut: convertedHls ? 45000 : 10000,
                     maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 10,
                     xhrSetup: (xhr, url) => {
                         if (mode === 'proxy' && new URL(url, window.location.href).pathname !== '/api/proxy/hls') {
@@ -729,8 +738,6 @@ function stopAccountPlayback() {
     document.getElementById('tv-player-buffering').classList.add('hidden');
     document.getElementById('tv-watermark-img').classList.add('hidden');
     document.getElementById('tv-player-channel-name').textContent = '';
-    document.getElementById('tv-epg-title-next').textContent = '';
-    document.getElementById('tv-epg-upcoming-time').textContent = '';
 }
 
 function showAccountEmptyState(message = 'No tienes canales habilitados. Añade una lista para ver TV en vivo.') {
@@ -796,6 +803,14 @@ function initAccountChannelSync() {
     document.addEventListener('visibilitychange', refreshLiveAccountChannels);
 }
 
+function recoverRejectedSession(response, token) {
+    if (![401, 403].includes(response.status) || !token || token !== currentUserToken) return false;
+    document.getElementById('btn-logout').click();
+    openAuthModal('login');
+    showAuthError('Tu sesión ya no es válida. Inicia sesión nuevamente.');
+    return true;
+}
+
 // Load playlists & channels for the authenticated user
 async function loadUserData() {
     if (!currentUserToken) return;
@@ -809,6 +824,7 @@ async function loadUserData() {
             headers: { 'Authorization': `Bearer ${currentUserToken}` }
         });
         if (revision !== userDataRevision) return;
+        if (recoverRejectedSession(plRes, token)) return;
         if (!plRes.ok) throw new Error('No se pudieron actualizar las listas. Intenta nuevamente.');
         if (plRes.ok) {
             const plData = await plRes.json();
@@ -824,6 +840,7 @@ async function loadUserData() {
         });
 
         if (revision !== userDataRevision) return;
+        if (recoverRejectedSession(chRes, token)) return;
         if (!chRes.ok) throw new Error('No se pudieron actualizar los canales. Intenta nuevamente.');
         if (chRes.ok) {
             const chData = await chRes.json();
@@ -1056,11 +1073,26 @@ function initTvVolume(video) {
     update();
 }
 
+async function copyTvPlaybackDiagnostics() {
+    const diagnostics = document.getElementById('tv-main-video').playbackDiagnostics;
+    if (!diagnostics?.errors.length) {
+        showToast('Todavía no hay un error registrado.');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(JSON.stringify({ ...diagnostics, browser: navigator.userAgent }, null, 2));
+        showToast('Diagnóstico copiado');
+    } catch {
+        showToast('El navegador bloqueó la copia del diagnóstico.');
+    }
+}
+
 function initTvPlaybackUi(video) {
     const container = document.getElementById('tv-video-container');
     const play = document.getElementById('btn-tv-play');
     const buffer = document.getElementById('tv-player-buffering');
     video.controls = false;
+    document.getElementById('btn-tv-copy-error')?.addEventListener('click', copyTvPlaybackDiagnostics);
     const update = () => {
         const paused = video.paused;
         play.setAttribute('aria-label', paused ? 'Reproducir' : 'Pausar');
@@ -1225,6 +1257,7 @@ async function launchTvLiveMode(targetChannel = null, availableChannels = null) 
                 cache: 'no-store', signal: controller.signal, headers: { Authorization: `Bearer ${token}` }
             });
             if (token !== currentUserToken || revision !== userDataRevision) return;
+            if ([401, 403].includes(response.status) && recoverRejectedSession(response, token)) return;
             if (!response.ok) throw new Error('No se pudieron actualizar los canales.');
             const data = await response.json();
             if (token !== currentUserToken || revision !== userDataRevision) return;
@@ -1419,6 +1452,7 @@ function playTvChannel(index) {
     const video = document.getElementById('tv-main-video');
     const bufferBadge = document.getElementById('tv-player-buffering');
     const errorBadge = document.getElementById('tv-player-error');
+    video.playbackDiagnostics = { channel: channel.name || '', errors: [] };
 
     bufferBadge.classList.remove('hidden');
     errorBadge.classList.add('hidden');
@@ -1430,8 +1464,13 @@ function playTvChannel(index) {
 
     const streamUrl = channel.url;
     const directTs = typeof DirectMpegts !== 'undefined' && DirectMpegts.isChannel(channel);
-    let usingProxy = channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl));
+    const localHosts = ['127.0.0.1', 'localhost', '[::1]'];
+    let localSource = false;
+    try { localSource = localHosts.includes(new URL(streamUrl).hostname); } catch {}
+    const convertedHls = localSource || (channel.playbackType === 'hls' && !!channel.sourceUrl && streamUrl !== channel.sourceUrl);
+    let usingProxy = !convertedHls && (channel.playbackMode === 'proxy' || (window.location.protocol === 'https:' && /^http:/i.test(streamUrl)));
     let recoveredMedia = false;
+    let mediaRestarts = 0;
     let networkRetries = 0;
     let retryTimer = null;
     const proxyUrl = url => API_BASE + '/api/proxy/hls?url=' + encodeURIComponent(url);
@@ -1454,8 +1493,13 @@ function playTvChannel(index) {
         showToast('Pulsa reproducir en la barra de controles para iniciar la señal');
     }
 
-    function startPlayback() {
+    function startPlayback(resetMedia = false) {
         if (tvHls) { tvHls.destroy(); tvHls = null; }
+        if (resetMedia) {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        }
         if (directTs) {
             const player = DirectMpegts.create(video, streamUrl, {
                 onBuffering: value => bufferBadge.classList.toggle('hidden', !value),
@@ -1501,8 +1545,25 @@ function playTvChannel(index) {
             });
             player.on(Hls.Events.ERROR, (_event, data) => {
                 if (tvHls !== player || !data.fatal) return;
+                // Capture the native error before recovery clears HTMLMediaElement.error.
+                // Do not include provider URLs, request headers or account credentials.
+                const nativeError = video.error;
+                video.playbackDiagnostics.errors.push({
+                    type: data.type,
+                    detail: data.details || '',
+                    hlsMessage: String(data.error?.message || data.reason || '').replace(/https?:\/\/[^\s"']+/g, '[URL]').slice(0, 500),
+                    mediaCode: nativeError?.code || 0,
+                    mediaMessage: String(nativeError?.message || '').replace(/https?:\/\/[^\s"']+/g, '[URL]').slice(0, 500),
+                    videoSize: [video.videoWidth || 0, video.videoHeight || 0],
+                    readyState: video.readyState,
+                    currentTime: video.currentTime,
+                    mediaRestarts,
+                    networkRetries
+                });
+                if (video.playbackDiagnostics.errors.length > 8) video.playbackDiagnostics.errors.shift();
+                if (retryTimer !== null) return;
                 // Do not retry a confirmed bad URL, HTML page or expired authorization.
-                if (usingProxy) {
+                if (usingProxy || convertedHls) {
                     try {
                         const raw = data.networkDetails?.responseText || data.response?.data || data.response?.text;
                         const detail = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -1513,7 +1574,7 @@ function playTvChannel(index) {
                         }
                     } catch { /* Non-JSON transport failures retain bounded network retries. */ }
                 }
-                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !usingProxy && !convertedHls) {
                     usingProxy = true;
                     showToast('Reintentando la señal mediante el servidor…');
                     startPlayback();
@@ -1524,23 +1585,41 @@ function playTvChannel(index) {
                     bufferBadge.classList.remove('hidden');
                     retryTimer = setTimeout(() => {
                         retryTimer = null;
-                        if (tvHls === player) player.startLoad();
+                        if (tvHls === player) {
+                            // A restarted converter has a new manifest and segment session.
+                            // startLoad() alone can keep requesting the vanished old files.
+                            if (convertedHls) startPlayback();
+                            else player.startLoad();
+                        }
                     }, delay);
                 } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
                     recoveredMedia = true;
                     player.recoverMediaError();
+                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRestarts < 1) {
+                    // A failed MSE decoder may survive recoverMediaError(). Rebuild
+                    // the video element's source and reload the live manifest once.
+                    mediaRestarts++;
+                    player.stopLoad();
+                    bufferBadge.classList.remove('hidden');
+                    showToast('Reiniciando la reproducción del canal…');
+                    retryTimer = setTimeout(() => {
+                        retryTimer = null;
+                        if (tvHls === player) startPlayback(true);
+                    }, 1000);
                 } else {
                     player.stopLoad();
                     fail(data.type === Hls.ErrorTypes.NETWORK_ERROR
-                        ? 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.'
-                        : 'El navegador no pudo decodificar este video. Prueba abrirlo en VLC.');
+                        ? (convertedHls ? 'El conversor no pudo entregar video. Comprueba que esté encendido y que la señal de origen esté disponible.' : 'No se pudo acceder a la señal. El origen puede estar caído, restringido o el enlace haber vencido.')
+                        : (data.type === Hls.ErrorTypes.MEDIA_ERROR
+                            ? 'No se pudo recuperar el video después de reiniciar el reproductor. Recarga la página e inténtalo nuevamente.'
+                            : 'El reproductor no pudo procesar esta señal. Vuelve a abrir el canal.'));
                 }
             });
             player.loadSource(usingProxy ? proxyUrl(streamUrl) : streamUrl);
             player.attachMedia(video);
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.onerror = () => {
-                if (!usingProxy) {
+                if (!usingProxy && !convertedHls) {
                     usingProxy = true;
                     startPlayback();
                 } else fail('No se pudo reproducir esta señal en el navegador. Prueba abrirla en VLC.');
@@ -1552,6 +1631,10 @@ function playTvChannel(index) {
         }
     }
     if (channel.playbackNotice) { fail(channel.playbackNotice); return; }
+    if (localSource && !localHosts.includes(new URL(window.location.href).hostname)) {
+        fail('Esta lista usa un conversor local. En este PC abre Abrir-Reproductor.cmd y http://127.0.0.1:3000. Para otros dispositivos necesitas una lista con enlaces públicos.');
+        return;
+    }
     startPlayback();
 
     video.onplaying = () => bufferBadge.classList.add('hidden');
@@ -1571,29 +1654,6 @@ function updateTvWatermarkAndEpg(channel) {
         watermark.classList.add('hidden');
     }
 
-    // Dynamic realistic EPG Program names
-    const now = new Date();
-    const currentHour = now.getHours();
-    const nextHour = (currentHour + 1) % 24;
-    document.getElementById('tv-epg-title-next').textContent = getDynamicProgramTitle(channel.name, nextHour);
-    document.getElementById('tv-epg-upcoming-time').textContent = `Comienza a las ${String(nextHour).padStart(2, '0')}:00`;
-}
-
-function getDynamicProgramTitle(name, hour) {
-    const ch = (name || '').toLowerCase();
-    if (ch.includes('noticias') || ch.includes('24 horas') || ch.includes('t13') || ch.includes('biobio')) {
-        if (hour >= 6 && hour < 9) return 'Edición Matinal en Vivo';
-        if (hour >= 13 && hour < 15) return 'Noticiero Tarde Central';
-        if (hour >= 20 && hour < 22) return 'Edición Central de Noticias';
-        return 'Noticias y Actualidad Minuto a Minuto';
-    }
-    if (ch.includes('mega') || ch.includes('13') || ch.includes('chilevisi') || ch.includes('tvn')) {
-        if (hour >= 8 && hour < 13) return 'Matinal en Directo';
-        if (hour >= 15 && hour < 18) return 'Telenovela & Reportajes';
-        if (hour >= 22) return 'Horario Estelar Prime';
-        return 'Transmisión Oficial en Directo';
-    }
-    return `Programa Especial (${String(hour).padStart(2, '0')}:00)`;
 }
 
 function toggleTvOverlay() {

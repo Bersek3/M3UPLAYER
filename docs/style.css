@@ -988,6 +988,19 @@ html, body {
     background: #000000;
 }
 
+body.tv-live-page {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+}
+body.tv-live-page .app-navbar { display: none; }
+body.tv-live-page .main-viewport { min-height: 0; }
+body.tv-live-page #view-live {
+    height: 100vh;
+    height: 100dvh;
+    animation: none;
+}
+
 .tv-screen-wrapper {
     width: 100%;
     height: 100%;
@@ -1115,6 +1128,10 @@ html, body {
     transform: translateX(-50%);
     z-index: 20;
     display: inline-flex;
+    max-width: calc(100% - 32px);
+    width: max-content;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     gap: 10px;
     background: rgba(239, 68, 68, 0.92);
@@ -1124,6 +1141,18 @@ html, body {
     font-size: 14px;
     font-weight: 700;
 }
+
+.btn-tv-copy-error {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border: 1px solid #ffffff80;
+    border-radius: 12px;
+    background: #00000020;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+}
+.btn-tv-copy-error:focus-visible { outline: 2px solid white; outline-offset: 2px; }
 
 /* Top-Right Watermark Logo */
 .tv-watermark-wrap {

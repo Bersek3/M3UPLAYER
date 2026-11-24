@@ -33,3 +33,4 @@ mcp_config.json
 # Lista local con enlaces de acceso del proveedor
 /playlists/chile.m3u
 /playlists/chile-convertidos-local.m3u
+/video-bridge/channel-profiles.local.json

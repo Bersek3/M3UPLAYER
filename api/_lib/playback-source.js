@@ -5,8 +5,15 @@ const bridgeSources = new Set(require('./bridge-sources.json'));
 function playbackSource(channel, env = process.env) {
     if (env.M3U_PLAYBACK_BRIDGE_URL) {
         try {
-            const source = new URL(channel.sourceUrl || channel.url).href;
-            const id = crypto.createHash('sha256').update(source).digest('hex').slice(0, 24);
+            const original = new URL(channel.sourceUrl || channel.url);
+            const source = original.href;
+            // Imported local converter playlists already carry the registered ID.
+            // Hashing their loopback URL again loses the original source identity.
+            const localPath = original.protocol === 'http:' &&
+                ['127.0.0.1', 'localhost', '[::1]'].includes(original.hostname) &&
+                !original.username && !original.password && !original.search && !original.hash &&
+                /^\/live\/([a-f0-9]{24})\/index\.m3u8$/.exec(original.pathname);
+            const id = localPath ? localPath[1] : crypto.createHash('sha256').update(source).digest('hex').slice(0, 24);
             const allowed = env.M3U_BRIDGE_SOURCE_IDS ? new Set(env.M3U_BRIDGE_SOURCE_IDS.split(',').map(value => value.trim())) : bridgeSources;
             const base = new URL(env.M3U_PLAYBACK_BRIDGE_URL);
             const local = base.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname);
